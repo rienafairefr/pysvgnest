@@ -1,0 +1,7 @@
+.tox
+dist
+*.egg-info
+.coverage
+coverage.xml
+\.idea/
+htmlcov/

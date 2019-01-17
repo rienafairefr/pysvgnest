@@ -9,7 +9,8 @@ from svgwrite.shapes import Rect
 
 def nest(output, files, wbin, hbin, enclosing_rectangle=False):
 
-    combined = Drawing(output, profile='tiny', size=('%smm' % wbin, '%smm' % hbin),
+    combined = Drawing(output, profile='tiny',
+                       size=('%smm' % wbin, '%smm' % hbin),
                        viewBox="0 0 %s %s" % (wbin, hbin))
 
     packer = newPacker()
@@ -38,9 +39,12 @@ def nest(output, files, wbin, hbin, enclosing_rectangle=False):
         bbox = bbox_paths(paths)
         for i in range(files[svg]):
             rid = svg + str(i)
-            all_paths[rid] = paths
+            all_paths[rid] = {
+                'paths': paths,
+                'bbox': bbox
+            }
             packer.add_rect(bbox[1] - bbox[0],
-                        bbox[3] - bbox[2], rid=rid)
+                            bbox[3] - bbox[2], rid=rid)
 
     packer.add_bin(wbin, hbin)
     print('Rectangle packing...')
@@ -48,12 +52,14 @@ def nest(output, files, wbin, hbin, enclosing_rectangle=False):
     rectangles = {r[5]: r for r in packer.rect_list()}
 
     print('packing into SVG...')
-    for rid, paths in all_paths.items():
+    for rid, obj in all_paths.items():
+        paths = obj['paths']
+        bbox = obj['bbox']
         group = Group()
 
-        bbox = bbox_paths(paths)
-        width, height = (float2dec(bbox[1] - bbox[0]), float2dec(bbox[3] - bbox[2]))
-        b, x, y, w, h, rid = rectangles[rid]
+        width, height = (float2dec(bbox[1] - bbox[0]),
+                         float2dec(bbox[3] - bbox[2]))
+        _, x, y, w, h, _ = rectangles[rid]
 
         if (width > height and w > h) or \
                 (width < height and w < h) or \
