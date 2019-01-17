@@ -5,7 +5,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='svgnest',
-    version='0.1',
+    version='0.2',
     description='SVG nesting',
     author='Matthieu Berthomé',
     author_email='matthieu.berthome@gmail.com',
@@ -17,6 +17,6 @@ setup(
                  'Programming Language :: Python',
                  'Programming Language :: Python :: 2',
                  'Programming Language :: Python :: 2.7'],
-    install_requires=['lxml', 'svgwrite', 'rectpack', 'svgpathtools'],
+    install_requires=['svgwrite', 'rectpack', 'svgpathtools'],
     python_requires='>=2.7,',
 )

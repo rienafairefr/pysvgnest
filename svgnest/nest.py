@@ -7,9 +7,9 @@ from svgwrite.path import Path
 from svgwrite.shapes import Rect
 
 
-def nest(files, wbin, hbin):
+def nest(output, files, wbin, hbin, enclosing_rectangle=False):
 
-    combined = Drawing('combined.svg', profile='tiny', size=('%smm' % wbin, '%smm' % hbin),
+    combined = Drawing(output, profile='tiny', size=('%smm' % wbin, '%smm' % hbin),
                        viewBox="0 0 %s %s" % (wbin, hbin))
 
     packer = newPacker()
@@ -76,10 +76,11 @@ def nest(files, wbin, hbin):
         group.rotate(rotate)
         combined.add(group)
 
-    r = Rect(size=(wbin, hbin))
-    r.fill(opacity=0)
-    r.stroke(color='lightgray')
-    combined.add(r)
+    if enclosing_rectangle:
+        r = Rect(size=(wbin, hbin))
+        r.fill(opacity=0)
+        r.stroke(color='lightgray')
+        combined.add(r)
 
     print('SVG saving...')
     combined.save(pretty=True)
