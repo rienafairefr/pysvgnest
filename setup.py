@@ -17,6 +17,9 @@ setup(
                  'Programming Language :: Python',
                  'Programming Language :: Python :: 2',
                  'Programming Language :: Python :: 2.7'],
+    entry_points={
+        'console_scripts': ['svgnest=svgnest.cli:main'],
+    },
     install_requires=['svgwrite', 'rectpack', 'svgpathtools'],
     python_requires='>=2.7,',
 )

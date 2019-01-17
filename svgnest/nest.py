@@ -23,7 +23,7 @@ def nest(output, files, wbin, hbin, enclosing_rectangle=False):
         for p in paths:
             p_bbox = p.bbox()
             if bbox is None:
-                bbox = tuple(float2dec(x) for x in p_bbox)
+                bbox = p_bbox
             else:
                 bbox = (
                     min(p_bbox[0], bbox[0]),
@@ -31,10 +31,11 @@ def nest(output, files, wbin, hbin, enclosing_rectangle=False):
                     min(p_bbox[2], bbox[2]),
                     max(p_bbox[3], bbox[3])
                 )
-        return bbox
+        return tuple(float2dec(x) for x in bbox)
 
     all_paths = {}
-    for svg in files:
+    for svg\
+            in files:
         paths, attributes = svg2paths(svg)
         bbox = bbox_paths(paths)
         for i in range(files[svg]):
@@ -43,13 +44,20 @@ def nest(output, files, wbin, hbin, enclosing_rectangle=False):
                 'paths': paths,
                 'bbox': bbox
             }
+            print(rid)
             packer.add_rect(bbox[1] - bbox[0],
                             bbox[3] - bbox[2], rid=rid)
 
-    packer.add_bin(wbin, hbin)
     print('Rectangle packing...')
     packer.pack()
-    rectangles = {r[5]: r for r in packer.rect_list()}
+
+    while True:
+        packer.add_bin(wbin, hbin)
+        rectangles = {r[5]: r for r in packer.rect_list()}
+        if len(rectangles) == len(all_paths):
+            break
+        else:
+            print('not enough space in the ')
 
     print('packing into SVG...')
     for rid, obj in all_paths.items():
