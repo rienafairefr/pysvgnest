@@ -1,3 +1,5 @@
+import os
+
 from rectpack import float2dec as _float2dec
 from rectpack import newPacker
 from svgpathtools import svg2paths
@@ -8,10 +10,6 @@ from svgwrite.shapes import Rect
 
 
 def nest(output, files, wbin, hbin, enclosing_rectangle=False):
-
-    combined = Drawing(output, profile='tiny',
-                       size=('%smm' % wbin, '%smm' % hbin),
-                       viewBox="0 0 %s %s" % (wbin, hbin))
 
     packer = newPacker()
 
@@ -49,17 +47,18 @@ def nest(output, files, wbin, hbin, enclosing_rectangle=False):
                             bbox[3] - bbox[2], rid=rid)
 
     print('Rectangle packing...')
-    packer.pack()
-
     while True:
         packer.add_bin(wbin, hbin)
+        packer.pack()
         rectangles = {r[5]: r for r in packer.rect_list()}
         if len(rectangles) == len(all_paths):
             break
         else:
-            print('not enough space in the ')
+            print('not enough space in the bin, adding ')
 
-    print('packing into SVG...')
+    combineds = {}
+
+    print('packing into SVGs...')
     for rid, obj in all_paths.items():
         paths = obj['paths']
         bbox = obj['bbox']
@@ -67,7 +66,18 @@ def nest(output, files, wbin, hbin, enclosing_rectangle=False):
 
         width, height = (float2dec(bbox[1] - bbox[0]),
                          float2dec(bbox[3] - bbox[2]))
-        _, x, y, w, h, _ = rectangles[rid]
+        bin, x, y, w, h, _ = rectangles[rid]
+        if bin not in combineds:
+            svg_file = output
+            if bin != 0 :
+                splitext = os.path.splitext(svg_file)
+                svg_file = splitext[0] + '.%s' % bin + splitext[1]
+            dwg = Drawing(svg_file, profile='tiny',
+                          size=('%smm' % wbin, '%smm' % hbin),
+                          viewBox="0 0 %s %s" % (wbin, hbin))
+            combineds[bin] = dwg
+
+        combined = combineds[bin]
 
         if (width > height and w > h) or \
                 (width < height and w < h) or \
@@ -82,7 +92,7 @@ def nest(output, files, wbin, hbin, enclosing_rectangle=False):
 
         for p in paths:
             path = Path(d=p.d())
-            path.stroke(color='red', width='0.1')
+            path.stroke(color='red', width='1')
             path.fill(opacity=0)
             group.add(path)
 
@@ -90,11 +100,12 @@ def nest(output, files, wbin, hbin, enclosing_rectangle=False):
         group.rotate(rotate)
         combined.add(group)
 
-    if enclosing_rectangle:
-        r = Rect(size=(wbin, hbin))
-        r.fill(opacity=0)
-        r.stroke(color='lightgray')
-        combined.add(r)
+    for combined in combineds.values():
+        if enclosing_rectangle:
+            r = Rect(size=(wbin, hbin))
+            r.fill(opacity=0)
+            r.stroke(color='lightgray')
+            combined.add(r)
 
-    print('SVG saving...')
-    combined.save(pretty=True)
+        print('SVG saving...')
+        combined.save(pretty=True)

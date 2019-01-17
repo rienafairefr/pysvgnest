@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/rienafairefr/pysvgnest.svg?branch=master)](https://travis-ci.org/rienafairefr/pysvgnest)s
+
 Small utility to nest multiple SVGs files into a single one, trying to minimize the empty wasted space. This is usually useful for lasercutting projects.
 
 For now, the nesting is ultra basic:
