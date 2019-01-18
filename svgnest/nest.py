@@ -69,7 +69,7 @@ def nest(output, files, wbin, hbin, enclosing_rectangle=False):
         bin, x, y, w, h, _ = rectangles[rid]
         if bin not in combineds:
             svg_file = output
-            if bin != 0 :
+            if bin != 0:
                 splitext = os.path.splitext(svg_file)
                 svg_file = splitext[0] + '.%s' % bin + splitext[1]
             dwg = Drawing(svg_file, profile='tiny',
