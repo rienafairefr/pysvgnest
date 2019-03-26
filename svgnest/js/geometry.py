@@ -34,3 +34,13 @@ class Vector(object):
         self.y = y
         self.start = start
         self.end = end
+
+
+class Polygon(list):
+    def __init__(self, l, source=None):
+        super().__init__(l)
+        self.source = source
+        self.offsetx = None
+        self.offsety = None
+        self.children = []
+        self.element_id = None

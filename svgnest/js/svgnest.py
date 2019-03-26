@@ -2,8 +2,12 @@
  SvgNest
  Licensed under the MIT license
 """
-from svgnest.js.svgparser import SvgParser, parseFloat
-from svgnest.js.geometryutil import GeometryUtil
+import math
+from pyclipper import scale_to_clipper, SimplifyPolygon, PFT_NONZERO, Area, CleanPolygon, scale_from_clipper
+
+from svgnest.js.geometry import Point, Polygon
+from svgnest.js.geometryutil import GeometryUtil, polygonArea, pointInPolygon
+from svgnest.js.svgparser import SvgParser, parseFloat, childElements
 
 
 class NfpCache:
@@ -24,7 +28,28 @@ class Config:
 def parseInt(value):
     return int(value)
 
- 
+
+def splice(target, start, delete_count=None, *items):
+    """Remove existing elements and/or add new elements to a list.
+
+    target        the target list (will be changed)
+    start         index of starting position
+    delete_count  number of items to remove (default: len(target) - start)
+    *items        items to insert at start index
+
+    Returns a new list of removed items (or an empty list)
+    """
+    if delete_count is None:
+        delete_count = len(target) - start
+
+    # store removed range in a separate list and replace with *items
+    total = start + delete_count
+    removed = target[start:total]
+    target[start:total] = items
+
+    return removed
+
+
 class SvgNest:
     
     def __init__(self):
@@ -51,16 +76,16 @@ class SvgNest:
         this.binPolygon = None
         this.tree = None
 
-        parser = SvgParser()
+        this.parser = SvgParser()
 
         # parse svg
-        svg = parser.load(svgstring)
+        this.svg = this.parser.load(svgstring)
         
-        this.style = parser.getStyle()
+        this.style = this.parser.getStyle()
 
-        svg = parser.clean()
+        this.svg = this.parser.clean()
         
-        tree = this.getParts(svg.children)
+        this.tree = this.getParts(childElements(this.svg))
 
         # re-order elements such that deeper elements are on top, so they can be moused over
         def zorder(paths):
@@ -70,7 +95,7 @@ class SvgNest:
                 if paths[i].children and len(paths[i].children) > 0:
                     zorder(paths[i].children)
 
-        return svg
+        return this.svg
 
     def setbin(self, element):
         if not self.svg:
@@ -120,14 +145,14 @@ class SvgNest:
             return False
 
         parts = list(this.svg.children)
-        binindex = parts.indexOf(bin)
+        binindex = parts.index(bin)
         
         if binindex >= 0:
             # don't process bin as a part of the tree
-            parts.splice(binindex, 1)
+            splice(parts, binindex, 1)
 
         # build tree without bin
-        tree = this.getParts(parts.slice(0))
+        tree = this.getParts(parts[:])
         
         # offset tree recursively
         def offsetTree(t, offset, offsetFunction):
@@ -201,8 +226,8 @@ class SvgNest:
 
         def workerTimer():
             if not self.working:
-                self.launchWorkers.call(self, tree, binPolygon, config, progressCallback, displayCallback)
-                self.working = true
+                self.launchWorkers.call(self, tree, binPolygon, this.config, progressCallback, displayCallback)
+                self.working = True
 
             progressCallback(progress)
             time.sleep(0.1)
@@ -220,7 +245,7 @@ class SvgNest:
           while 0 != currentIndex:
 
             # Pick a remaining element...
-            randomIndex = Math.floor(Math.random() * currentIndex)
+            randomIndex = math.floor(math.random() * currentIndex)
             currentIndex -= 1
 
              # And swap it with the current element.
@@ -238,7 +263,7 @@ class SvgNest:
             adam = tree.slice(0)
 
             # seed with decreasing area
-            adam.sort(lambda a, b: math.abs(GeometryUtil.polygonArea(b)) - Math.abs(GeometryUtil.polygonArea(a)))
+            adam.sort(lambda a, b: abs(GeometryUtil.polygonArea(b)) - abs(GeometryUtil.polygonArea(a)))
 
             this.GA = GeneticAlgorithm(adam, binPolygon, config)
 
@@ -508,7 +533,7 @@ class SvgNest:
 
     # assuming no intersections, return a tree where odd leaves are parts and even ones are holes
     # might be easier to use the DOM, but paths can't have paths as children. So we'll just make our own tree.
-    def getParts(self, paths):
+    def getParts(this, paths):
         
         i = 0
         k = 0
@@ -516,15 +541,15 @@ class SvgNest:
         
         numChildren = len(paths)
         for i in range(0, numChildren):
-            poly = SvgParser.polygonify(paths[i])
-            poly = this.cleanPolygon(poly)
+            poly = this.parser.polygonify(paths[i])
+            poly = Polygon(this.cleanPolygon(poly))
             
             # todo: warn user if poly could not be processed and is excluded from the nest
-            if poly and len(poly) > 2 and Math.abs(GeometryUtil.polygonArea(poly)) > config.curveTolerance*config.curveTolerance:
+            if poly and len(poly) > 2 and abs(polygonArea(poly)) > this.config.curveTolerance**2 :
                 poly.source = i
                 polygons.append(poly)
 
-        def toTree(list, idstart=None):
+        def toTree(list_, idstart=None):
             parents = []
             i = None
             j = None
@@ -532,28 +557,33 @@ class SvgNest:
             # assign a unique id to each leaf
             id = idstart or 0
             
-            for i in range(0, len(list)):
-                p = list[i]
+            for i in range(0, len(list_)):
+                p = list_[i]
                 
                 ischild = False
-                for j in range(0, len(list)):
-                    if j==i:
+                for j in range(0, len(list_)):
+                    if j == i:
                         continue
-                    if GeometryUtil.pointInPolygon(p[0], list[j]) == True:
-                        if not list[j].children:
-                            list[j].children = []
-                        list[j].children.append(p)
-                        p.parent = list[j]
-                        ischild = true
+                    if pointInPolygon(p[0], list_[j]) == True:
+                        list_[j].children.append(p)
+                        p.parent = list_[j]
+                        ischild = True
                         break
 
                 if not ischild:
-                    parents.push(p)
-
-            for i in range(0, len(list)):
-                if parents.indexOf(list[i]) < 0:
-                    list.splice(i, 1)
+                    parents.append(p)
+# for(i=0; i<list.length; i++){
+#     if(parents.indexOf(list[i]) < 0){
+#         list.splice(i, 1);
+#         i--;
+#     }
+# }
+            while i < len(list_):
+                if list_[i] not in parents:
+                    splice(list_, i, 1)
                     i -= 1
+
+                i += 1
 
             for i in range(0, len(parents)):
                 parents[i].id = id
@@ -595,45 +625,42 @@ class SvgNest:
     def cleanPolygon(this, polygon):
         p = this.svgToClipper(polygon)
         # remove self-intersections and find the biggest polygon that's left
-        simple = ClipperLib.Clipper.SimplifyPolygon(p, ClipperLib.PolyFillType.pftNonZero)
+        simple = SimplifyPolygon(p, PFT_NONZERO)
         
         if not simple or len(simple) == 0:
             return None
 
         biggest = simple[0]
-        biggestarea = Math.abs(ClipperLib.Clipper.Area(biggest))
+        biggestarea = abs(Area(biggest))
         for i in range(1, len(simple)):
-            area = Math.abs(ClipperLib.Clipper.Area(simple[i]))
+            area = abs(Area(simple[i]))
             if area > biggestarea:
                 biggest = simple[i]
                 biggestarea = area
 
         # clean up singularities, coincident points and edges
-        clean = ClipperLib.Clipper.CleanPolygon(biggest, this.config.curveTolerance * this.config.clipperScale)
+        clean = CleanPolygon(biggest, this.config.curveTolerance * this.config.clipperScale)
                     
         if not clean or len(clean) == 0:
             return None
 
         return this.clipperToSvg(clean)
 
-    
     # converts a polygon from normal float coordinates to integer coordinates used by clipper, as well as x/y -> X/Y
     def svgToClipper(self, polygon):
         clip = []
         for i in range(0, len(polygon)):
-            clip.push({'X': polygon[i].x, 'Y': polygon[i].y})
+            clip.append([polygon[i].x, polygon[i].y])
 
-        ClipperLib.JS.ScaleUpPath(clip, self.config.clipperScale)
+        scaled = scale_to_clipper(clip, self.config.clipperScale)
         
-        return clip
+        return scaled
 
     def clipperToSvg(self, polygon):
-        normal = []
-        
-        for i in range(0, len(polygon)):
-            normal.append({'x': polygon[i].X/config.clipperScale, 'y': polygon[i].Y / self.config.clipperScale})
 
-        return normal
+        normal = scale_from_clipper(polygon, self.config.clipperScale)
+
+        return [Point(x=polygon[0], y=polygon[1]) for polygon in normal]
 
     # returns an array of SVG elements that represent the placement, for export or rendering
     def applyPlacement(this, placement):
@@ -717,7 +744,7 @@ class GeneticAlgorithm:
     def randomAngle(this, part):
     
         angleList = []
-        for i in range(0, math.max(this.config.rotations,1)):
+        for i in range(0, max(this.config.rotations,1)):
             angleList.append(i*(360/this.config.rotations))
 
         def shuffleArray(array):
@@ -761,7 +788,7 @@ class GeneticAlgorithm:
 
     # single point crossover
     def mate(this, male, female):
-        cutpoint = math.round(math.min(math.max(math.random(), 0.1), 0.9)*(len(male.placement)-1))
+        cutpoint = round(min(max(math.random(), 0.1), 0.9)*(len(male.placement)-1))
 
         gene1 = male.placement.slice(0,cutpoint)
         rot1 = male.rotation.slice(0,cutpoint)

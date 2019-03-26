@@ -1,5 +1,6 @@
+from xml.dom.minidom import parse, parseString
 
 
 class DOMParser:
     def parseFromString(self, markup, type):
-        pass
+        return parseString(markup)
