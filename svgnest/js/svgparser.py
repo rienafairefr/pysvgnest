@@ -1,8 +1,11 @@
 import math
 import re
 
+from svgpathtools import QuadraticBezier
+
 from svgnest.js.domparser import DOMParser
-from svgnest.js.geometryutil import GeometryUtil
+from svgnest.js.geometry import Point, Arc
+from svgnest.js.geometryutil import GeometryUtil, CubicBezier
 from svgnest.js.matrix import Matrix
 
 
@@ -13,12 +16,6 @@ class Config:
 
 def parseFloat(f):
     return float(f)
-
-
-class Point(object):
-    def __init__(self, x=None, y=None):
-        self.x = x
-        self.y = y
 
 
 class SvgParser:
@@ -221,9 +218,9 @@ class SvgParser:
                 # the goal is to remove the transform property, but an ellipse without a transform will have no rotation
                 # for the sake of simplicity, we will replace the ellipse with a path, and apply the transform to that path
                 path = this.svg.createElementNS(element.namespaceURI, 'path')
-                move = path.createSVGPathSegMovetoAbs(parseFloat(element.getAttribute('cx')) - parseFloat(element.getAttribute('rx')),element.getAttribute('cy'))
-                arc1 = path.createSVGPathSegArcAbs(parseFloat(element.getAttribute('cx'))+parseFloat(element.getAttribute('rx')),element.getAttribute('cy'),element.getAttribute('rx'),element.getAttribute('ry'),0,1,0)
-                arc2 = path.createSVGPathSegArcAbs(parseFloat(element.getAttribute('cx'))-parseFloat(element.getAttribute('rx')),element.getAttribute('cy'),element.getAttribute('rx'),element.getAttribute('ry'),0,1,0)
+                move = path.createSVGPathSegMovetoAbs(parseFloat(element.getAttribute('cx')) - parseFloat(element.getAttribute('rx')), element.getAttribute('cy'))
+                arc1 = path.createSVGPathSegArcAbs(parseFloat(element.getAttribute('cx')) + parseFloat(element.getAttribute('rx')), element.getAttribute('cy'), element.getAttribute('rx'), element.getAttribute('ry'), 0, 1, 0)
+                arc2 = path.createSVGPathSegArcAbs(parseFloat(element.getAttribute('cx')) - parseFloat(element.getAttribute('rx')), element.getAttribute('cy'), element.getAttribute('rx'), element.getAttribute('ry'), 0, 1, 0)
 
                 path.pathSegList.appendItem(move)
                 path.pathSegList.appendItem(arc1)
@@ -534,7 +531,7 @@ class SvgParser:
                 # linear line types
                 if command == 'm' or command == 'M' or  command == 'l' or  command == 'L'\
                 or command == 'h' or command == 'H' or command == 'v' or command == 'V':
-                    point = Point(x,y)
+                    point = Point(x, y)
                     point.x = x
                     point.y = y
                     poly.push(point)
@@ -548,10 +545,10 @@ class SvgParser:
                         x1 = prevx
                         y1 = prevy
                 elif command == 'q' or command == 'Q':
-                    pointlist = GeometryUtil.QuadraticBezier.linearize({x: prevx, y: prevy}, {x: x, y: y}, {x: x1, y: y1}, this.conf.tolerance)
+                    pointlist = QuadraticBezier.linearize(Point(x= prevx, y= prevy), Point(x= x, y= y), Point(x= x1, y= y1), this.conf.tolerance)
                     pointlist.shift() # firstpoint would already be in the poly
                     for j in range(0, len(pointlist)):
-                        point = Point(pointlist[j].x,  pointlist[j].y)
+                        point = Point(pointlist[j].x, pointlist[j].y)
                         poly.append(point)
                 elif command == 's' or command == 'S':
                     if i > 0 and re.match('[CcSs]', seglist.getItem(i-1).pathSegTypeAsLetter):
@@ -561,17 +558,17 @@ class SvgParser:
                         x1 = prevx
                         y1 = prevy
                 elif command == 'c' or command == 'C':
-                    pointlist = GeometryUtil.CubicBezier.linearize({x: prevx, y: prevy}, {x: x, y: y}, {x: x1, y: y1}, {x: x2, y: y2}, this.conf.tolerance)
+                    pointlist = CubicBezier.linearize({x: prevx, y: prevy}, Point(x=x, y= y), Point(x= x1, y= y1), {x: x2, y: y2}, this.conf.tolerance)
                     pointlist.shift()  # firstpoint would already be in the poly
                     for j in range(0, len(pointlist)):
                         point = Point(pointlist[j].x, pointlist[j].y)
                         poly.append(point)
                 elif command == 'a' or command == 'A':
-                    pointlist = GeometryUtil.Arc.linearize({x: prevx, y: prevy}, {x: x, y: y}, s.r1, s.r2, s.angle, s.largeArcFlag,s.sweepFlag, this.conf.tolerance)
+                    pointlist = Arc.linearize(Point(x= prevx, y= prevy), Point(x= x, y= y), s.r1, s.r2, s.angle, s.largeArcFlag,s.sweepFlag, this.conf.tolerance)
                     pointlist.shift()
 
                     for j in range(0, len(pointlist)):
-                        point = Point(pointlist[j].x,pointlist[j].y)
+                        point = Point(pointlist[j].x, pointlist[j].y)
                         poly.append(point)
                 elif command == 'z' or command == 'Z':
                     x=x0; y=y0;
@@ -582,7 +579,7 @@ class SvgParser:
                     y0=y
 
         # do not include last point if coincident with starting point
-        while (poly.length > 0 and GeometryUtil.almostEqual(poly[0].x,poly[poly.length-1].x, this.conf.toleranceSvg) and GeometryUtil.almostEqual(poly[0].y,poly[poly.length-1].y, this.conf.toleranceSvg)):
+        while poly.length > 0 and GeometryUtil.almostEqual(poly[0].x, poly[poly.length - 1].x, this.conf.toleranceSvg) and GeometryUtil.almostEqual(poly[0].y, poly[poly.length - 1].y, this.conf.toleranceSvg):
             poly.pop()
 
         return poly

@@ -5,6 +5,7 @@ name = "pypi"
 
 [packages]
 svgnest = {editable = true, path = "."}
+argparse = "==1.4.0"
 
 [dev-packages]
 
