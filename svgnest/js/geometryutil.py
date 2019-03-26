@@ -5,7 +5,7 @@ Licensed under the MIT license
 """
 import math
 
-from svgnest.js.geometry import Segment, Point, Arc, PolygonBound, Vector
+from svgnest.js.geometry import Segment, Point, Arc, PolygonBound, Vector, Polygon
 
 TOL = pow(10, -9)  # Floating point error is likely to be above 1 epsilon
 
@@ -132,7 +132,7 @@ def _lineIntersect(A, B, E, F, infinite):
 class GeometryUtil:
 
     @staticmethod
-    def almostEqual(a, b, tolerance):
+    def almostEqual(a, b, tolerance=TOL):
         return _almostEqual(a, b, tolerance)
 
     @staticmethod
@@ -468,16 +468,16 @@ def getPolygonBounds(polygon):
     ymin = polygon[0].y
     ymax = polygon[0].y
 
-    for i in range(1, len(polygon)):
-        if polygon[i].x > xmax:
-            xmax = polygon[i].x
-        elif polygon[i].x < xmin:
-            xmin = polygon[i].x
+    for point in polygon:
+        if point.x > xmax:
+            xmax = point.x
+        elif point.x < xmin:
+            xmin = point.x
 
-        if polygon[i].y > ymax:
-            ymax = polygon[i].y
-        elif polygon[i].y < ymin:
-            ymin = polygon[i].y
+        if point.y > ymax:
+            ymax = point.y
+        elif point.y < ymin:
+            ymin = point.y
 
     return PolygonBound(
         x=xmin,
@@ -1668,15 +1668,15 @@ def polygonHull(A, B):
 
 
 def rotatePolygon( polygon, angle):
-    rotated = []
-    angle = angle * math.PI / 180
-    for i in range(0, len(polygon)):
-        x = polygon[i].x
-        y = polygon[i].y
+    rotated = Polygon()
+    angle = angle * math.pi / 180
+    for point in polygon:
+        x = point.x
+        y = point.y
         x1 = x * math.cos(angle) - y * math.sin(angle)
         y1 = x * math.sin(angle) + y * math.cos(angle)
 
-        rotated.append({x: x1, y: y1})
+        rotated.append(Point(x= x1, y= y1))
     # reset bounding box
     bounds = getPolygonBounds(rotated)
     rotated.x = bounds.x

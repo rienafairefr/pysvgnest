@@ -1,3 +1,5 @@
+
+
 class Segment(object):
     def __init__(self, p1, p2, c1, c2=None):
         self.p1 = p1
@@ -11,6 +13,9 @@ class Point(object):
         self.x = x
         self.y = y
 
+    def almostEqual(self, other):
+        from svgnest.js.geometryutil import GeometryUtil
+        return GeometryUtil.almostEqual(self.x, other.x) and GeometryUtil.almostEqual(self.y, other.y)
 
 class Arc:
     def __init__(self, center=None, rx=None, ry=None, theta=None, extent=None, angle=None):
@@ -23,8 +28,11 @@ class Arc:
 
 
 class PolygonBound:
-    def __init__(self):
-        pass
+    def __init__(self, x=None, y=None, width=None, height=None):
+        self.x = x
+        self.y = y
+        self.width = width
+        self.height = height
 
 
 class Vector(object):
@@ -37,10 +45,14 @@ class Vector(object):
 
 
 class Polygon(list):
-    def __init__(self, l, source=None):
+    def __init__(self, l=None, source=None):
+        if l is None:
+            l = []
         super().__init__(l)
         self.source = source
         self.offsetx = None
         self.offsety = None
         self.children = []
         self.element_id = None
+        self.width = None
+        self.height = None

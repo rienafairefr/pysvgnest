@@ -9,15 +9,12 @@ from svgnest.js.domparser import DOMParser
 from svgnest.js.geometry import Point, Arc, Polygon
 from svgnest.js.geometryutil import GeometryUtil, CubicBezier, QuadraticBezier
 from svgnest.js.matrix import Matrix
+from svgnest.js.utils import parseFloat
 
 
 class Config:
     tolerance = 2  # max bound for bezier->line segment conversion, in native SVG units
     toleranceSvg = 0.005  # fudge factor for browser inaccuracy in SVG unit handling
-
-
-def parseFloat(f):
-    return float(f)
 
 
 def childElements(element):
@@ -304,18 +301,18 @@ class SvgParser:
     def config(self, config):
         self.conf.tolerance = config.tolerance
 
-    def load(this, svgString):
+    def load(self, svgString):
         parser = DOMParser()
         svg = parser.parseFromString(svgString, "image/svg+xml")
 
         if svg:
-            this.svg = svg
+            self.svg = svg
             for children in svg.childNodes:
                 if children.nodeType != Node.COMMENT_NODE:
-                    this.svgRoot = children
+                    self.svgRoot = children
                     break
 
-        return this.svgRoot
+        return self.svgRoot
 
     # use the utility functions in this class to prepare the svg for CAD-CAM/nest related operations
     def clean(this):
@@ -707,15 +704,15 @@ class SvgParser:
         return addedPaths
 
     # recursively run the given function on the given element
-    def recurse(this, element, func):
+    def recurse(self, element, func):
         # only operate on original DOM tree, ignore any children that are added. Avoid infinite loops
         for child in childElements(element):
-            this.recurse(child, func)
+            self.recurse(child, func)
 
         func(element)
 
     # return a polygon from the given SVG element in the form of an array of points
-    def polygonify(this, element):
+    def polygonify(self, element):
         poly = Polygon([])
         i = 0
 
@@ -753,7 +750,7 @@ class SvgParser:
             cy = parseFloat(element.getAttribute('cy'))
 
             # num is the smallest number of segments required to approximate the circle to the given tolerance
-            num = math.ceil((2 * math.pi) / math.acos(1 - (this.conf.tolerance / radius)))
+            num = math.ceil((2 * math.pi) / math.acos(1 - (self.conf.tolerance / radius)))
 
             if num < 3:
                 num = 3
@@ -775,7 +772,7 @@ class SvgParser:
             cx = parseFloat(element.getAttribute('cx'))
             cy = parseFloat(element.getAttribute('cy'))
 
-            num = math.ceil((2 * math.pi) / math.acos(1 - (this.conf.tolerance / maxradius)))
+            num = math.ceil((2 * math.pi) / math.acos(1 - (self.conf.tolerance / maxradius)))
 
             if num < 3:
                 num = 3
@@ -843,7 +840,7 @@ class SvgParser:
                         y1 = prevy
                 elif command == 'q' or command == 'Q':
                     pointlist = QuadraticBezier.linearize(Point(x=prevx, y=prevy), Point(x=x, y=y), Point(x=x1, y=y1),
-                                                          this.conf.tolerance)
+                                                          self.conf.tolerance)
                     pointlist.shift()  # firstpoint would already be in the poly
                     for j in range(0, len(pointlist)):
                         point = Point(pointlist[j].x, pointlist[j].y)
@@ -857,14 +854,14 @@ class SvgParser:
                         y1 = prevy
                 elif command == 'c' or command == 'C':
                     pointlist = CubicBezier.linearize({x: prevx, y: prevy}, Point(x=x, y=y), Point(x=x1, y=y1),
-                                                      {x: x2, y: y2}, this.conf.tolerance)
+                                                      {x: x2, y: y2}, self.conf.tolerance)
                     pointlist.shift()  # firstpoint would already be in the poly
                     for j in range(0, len(pointlist)):
                         point = Point(pointlist[j].x, pointlist[j].y)
                         poly.append(point)
                 elif command == 'a' or command == 'A':
                     pointlist = Arc.linearize(Point(x=prevx, y=prevy), Point(x=x, y=y), s.r1, s.r2, s.angle,
-                                              s.largeArcFlag, s.sweepFlag, this.conf.tolerance)
+                                              s.largeArcFlag, s.sweepFlag, self.conf.tolerance)
                     pointlist.shift()
 
                     for j in range(0, len(pointlist)):
@@ -881,8 +878,8 @@ class SvgParser:
 
         # do not include last point if coincident with starting point
         while len(poly) > 0 and GeometryUtil.almostEqual(poly[0].x, poly[-1].x,
-                                                           this.conf.toleranceSvg) and GeometryUtil.almostEqual(
-                poly[0].y, poly[-1].y, this.conf.toleranceSvg):
+                                                         self.conf.toleranceSvg) and GeometryUtil.almostEqual(
+                poly[0].y, poly[-1].y, self.conf.toleranceSvg):
             poly.pop()
 
         return poly

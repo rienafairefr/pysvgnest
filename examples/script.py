@@ -5,7 +5,7 @@ svgString = open('drawing.svg', 'r').read()
 nest = SvgNest()
 svg = nest.parsesvg(svgString)
 t = nest.tree
-nest.setbin(el)
+nest.setbin(svg.childNodes[15])
 
 def progress(*args, **lwargs):
     pass

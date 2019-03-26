@@ -2,12 +2,19 @@
  SvgNest
  Licensed under the MIT license
 """
+import json
 import math
+import multiprocessing
+import threading
+import time
 from pyclipper import scale_to_clipper, SimplifyPolygon, PFT_NONZERO, Area, CleanPolygon, scale_from_clipper
+from random import random
 
 from svgnest.js.geometry import Point, Polygon
-from svgnest.js.geometryutil import GeometryUtil, polygonArea, pointInPolygon
-from svgnest.js.svgparser import SvgParser, parseFloat, childElements
+from svgnest.js.geometryutil import GeometryUtil, polygonArea, pointInPolygon, getPolygonBounds, rotatePolygon
+from svgnest.js.placementworker import PlacementWorker
+from svgnest.js.svgparser import SvgParser, childElements
+from svgnest.js.utils import splice, parseInt, parseFloat
 
 
 class NfpCache:
@@ -23,31 +30,6 @@ class Config:
     mutationRate= 10
     useHoles= False
     exploreConcave= False
-
-
-def parseInt(value):
-    return int(value)
-
-
-def splice(target, start, delete_count=None, *items):
-    """Remove existing elements and/or add new elements to a list.
-
-    target        the target list (will be changed)
-    start         index of starting position
-    delete_count  number of items to remove (default: len(target) - start)
-    *items        items to insert at start index
-
-    Returns a new list of removed items (or an empty list)
-    """
-    if delete_count is None:
-        delete_count = len(target) - start
-
-    # store removed range in a separate list and replace with *items
-    total = start + delete_count
-    removed = target[start:total]
-    target[start:total] = items
-
-    return removed
 
 
 class SvgNest:
@@ -67,25 +49,26 @@ class SvgNest:
         self.best = None
         self.workerTimer = None
         self.progress = 0
+        self.parser = None
     
-    def parsesvg(this, svgstring):
+    def parsesvg(self, svgstring):
         # reset if in progress
-        this.stop()
+        self.stop()
         
-        this.bin = None
-        this.binPolygon = None
-        this.tree = None
+        self.bin = None
+        self.binPolygon = None
+        self.tree = None
 
-        this.parser = SvgParser()
+        self.parser = SvgParser()
 
         # parse svg
-        this.svg = this.parser.load(svgstring)
+        self.svg = self.parser.load(svgstring)
         
-        this.style = this.parser.getStyle()
+        self.style = self.parser.getStyle()
 
-        this.svg = this.parser.clean()
+        self.svg = self.parser.clean()
         
-        this.tree = this.getParts(childElements(this.svg))
+        self.tree = self.getParts(childElements(self.svg))
 
         # re-order elements such that deeper elements are on top, so they can be moused over
         def zorder(paths):
@@ -95,7 +78,7 @@ class SvgNest:
                 if paths[i].children and len(paths[i].children) > 0:
                     zorder(paths[i].children)
 
-        return this.svg
+        return self.svg
 
     def setbin(self, element):
         if not self.svg:
@@ -109,7 +92,7 @@ class SvgNest:
             return this.config
 
         if c.curveTolerance and not GeometryUtil.almostEqual(parseFloat(c.curveTolerance), 0):
-            this.config.curveTolerance =  this.parseFloat(c.curveTolerance)
+            this.config.curveTolerance = parseFloat(c.curveTolerance)
 
         if 'spacing' in c:
             this.config.spacing = parseFloat(c.spacing)
@@ -129,8 +112,8 @@ class SvgNest:
         if 'exploreConcave' in c:
             this.config.exploreConcave = not not c.exploreConcave
 
-        this.config({ 'tolerance': this.config.curveTolerance})
-        
+        this.config(Config(tolerance=this.config.curveTolerance))
+
         this.best = None
         this.nfpCache = {}
         this.binPolygon = None
@@ -144,8 +127,8 @@ class SvgNest:
         if not this.svg or not this.bin:
             return False
 
-        parts = list(this.svg.children)
-        binindex = parts.index(bin)
+        parts = childElements(this.svg)
+        binindex = parts.index(this.bin)
         
         if binindex >= 0:
             # don't process bin as a part of the tree
@@ -158,25 +141,27 @@ class SvgNest:
         def offsetTree(t, offset, offsetFunction):
             for i in range(0, len(t)):
                 offsetpaths = offsetFunction(t[i], offset)
-                if offsetpaths.length == 1:
+                if len(offsetpaths) == 1:
                     # replace array items in place
-                    Array.prototype.splice.apply(t[i], [0, t[i].length].concat(offsetpaths[0]))
+                    to_add = [0, t[i].length]
+                    to_add.extend(offsetpaths[0])
+                    splice(t[i], to_add)
 
                 if t[i].children and len(t[i].children) > 0:
                     offsetTree(t[i].children, -offset, offsetFunction)
 
-        offsetTree(tree, 0.5 * this.config.spacing, this.polygonOffset.bind(this))
+        offsetTree(tree, 0.5 * this.config.spacing, this.polygonOffset)
 
-        binPolygon = SvgParser.polygonify(bin)
+        binPolygon = this.parser.polygonify(this.bin)
         binPolygon = this.cleanPolygon(binPolygon)
                     
         if not binPolygon or len(binPolygon) < 3:
             return False
 
-        this.binBounds = GeometryUtil.getPolygonBounds(binPolygon)
+        this.binBounds = getPolygonBounds(binPolygon)
                     
         if this.config.spacing > 0:
-            offsetBin = this.polygonOffset(binPolygon, -0.5*config.spacing)
+            offsetBin = this.polygonOffset(binPolygon, -0.5 * self.config.spacing)
             if len(offsetBin) == 1:
                 # if the offset contains 0 or more than 1 path, something went wrong.
                 binPolygon = offsetBin.pop()
@@ -187,7 +172,7 @@ class SvgNest:
         xbinmax = binPolygon[0].x
         xbinmin = binPolygon[0].x
         ybinmax = binPolygon[0].y
-        binmin = binPolygon[0].y
+        ybinmin = binPolygon[0].y
         
         for i in range(1, len(binPolygon)):
             if binPolygon[i].x > xbinmax:
@@ -207,78 +192,78 @@ class SvgNest:
         binPolygon.height = ybinmax-ybinmin
         
         # all paths need to have the same winding direction
-        if GeometryUtil.polygonArea(binPolygon) > 0:
+        if polygonArea(binPolygon) > 0:
             binPolygon.reverse()
 
         # remove duplicate endpoints, ensure counterclockwise winding direction
         for i in range(0, len(tree)):
             start = tree[i][0]
-            end = tree[i][tree[i].length-1]
-            if start == end or (GeometryUtil.almostEqual(start.x,end.x) and GeometryUtil.almostEqual(start.y,end.y)):
+            end = tree[i][-1]
+            if start == end or start.almostEqual(end):
                 tree[i].pop()
 
-            if GeometryUtil.polygonArea(tree[i]) > 0:
+            if polygonArea(tree[i]) > 0:
                 tree[i].reverse()
 
         self = this
         this.working = False
 
-
         def workerTimer():
             if not self.working:
-                self.launchWorkers.call(self, tree, binPolygon, this.config, progressCallback, displayCallback)
+                self.launchWorkers(tree, binPolygon, this.config, progressCallback, displayCallback)
                 self.working = True
 
-            progressCallback(progress)
+            progressCallback(self.progress)
             time.sleep(0.1)
         
-        threading.thread(workerTimer).start()
-
+        worker = threading.Thread(target=workerTimer)
+        worker.start()
+        worker.join()
 
     def launchWorkers(this, tree, binPolygon, config, progressCallback, displayCallback):
         def shuffle(array):
-          currentIndex = array.length
-          temporaryValue = None
-          randomIndex = 0
+            currentIndex = array.length
+            temporaryValue = None
+            randomIndex = 0
 
-          # While there remain elements to shuffle...
-          while 0 != currentIndex:
+            # While there remain elements to shuffle...
+            while 0 != currentIndex:
 
-            # Pick a remaining element...
-            randomIndex = math.floor(math.random() * currentIndex)
-            currentIndex -= 1
+                # Pick a remaining element...
+                randomIndex = math.floor(math.random() * currentIndex)
+                currentIndex -= 1
 
-             # And swap it with the current element.
-            temporaryValue = array[currentIndex]
-            array[currentIndex] = array[randomIndex]
-            array[randomIndex] = temporaryValue
+                 # And swap it with the current element.
+                temporaryValue = array[currentIndex]
+                array[currentIndex] = array[randomIndex]
+                array[randomIndex] = temporaryValue
 
-          return array
+            return array
 
         i = None
-        j= None
+        j = None
         
         if this.GA is None:
             # initiate new GA
-            adam = tree.slice(0)
+            adam = tree[:]
 
             # seed with decreasing area
-            adam.sort(lambda a, b: abs(GeometryUtil.polygonArea(b)) - abs(GeometryUtil.polygonArea(a)))
+            adam.sort(key=lambda a: abs(polygonArea(a)))
 
             this.GA = GeneticAlgorithm(adam, binPolygon, config)
 
         individual = None
         
         # evaluate all members of the population
-        for i in range(0, this.GA.population.length):
-            if not GA.population[i].fitness:
-                individual = GA.population[i]
+        for i in range(0, len(this.GA.population)):
+            if not this.GA.population[i].fitness:
+                individual = this.GA.population[i]
                 break
 
         if individual is None:
             # all individuals have been evaluated, start next generation
             this.GA.generation()
-            individual = GA.population[1]
+            individual = this.GA.population[1]
 
         placelist = individual.placement
         rotations = individual.rotation
@@ -289,32 +274,31 @@ class SvgNest:
             placelist[i].rotation = rotations[i]
 
         nfpPairs = []
-        key
-        newCache = NfpCache()
+        key = None
+        newCache = {}
         
-        for i in range(0, len(pacelist)):
-            part = placelist[i]
+        for i, part in enumerate(placelist):
             key = {'A': binPolygon.id, 'B': part.id, 'inside': True, 'Arotation': 0, 'Brotation': rotations[i]}
             json_key = json.dumps(key)
-            if not nfpCache[json_key]:
-                nfpPairs.append({A: binPolygon, B: part, key: key})
+            if not this.nfpCache.get(json_key):
+                nfpPairs.append({'A': binPolygon, 'B': part, 'key': key})
             else:
-                newCache[json_key] = nfpCache[json_key]
+                newCache[json_key] = this.nfpCache[json_key]
 
             for j in range(0, i):
                 placed = placelist[j]
                 key = {'A': placed.id, 'B': part.id, 'inside': False, 'Arotation': rotations[j], 'Brotation': rotations[i]}
                 json_key = json.dumps(key)
-                if not nfpCache[json_key]:
+                if not this.nfpCache.get(json_key):
                     nfpPairs.append({'A': placed, 'B': part, 'key': key})
                 else:
-                    newCache[json_key] = nfpCache[json_key]
+                    newCache[json_key] = this.nfpCache[json_key]
 
         # only keep cache for one cycle
         nfpCache = newCache
         
-        worker = PlacementWorker(binPolygon, placelist.slice(0), ids, rotations, config, nfpCache)
-        
+        worker = PlacementWorker(binPolygon, placelist[:], ids, rotations, config, nfpCache)
+        """
         p = Parallel(nfpPairs, {
             env: {
                 'binPolygon': binPolygon,
@@ -323,11 +307,6 @@ class SvgNest:
             },
             evalPath: 'util/eval.js'
         })
-        
-        p.require('matrix.js')
-        p.require('geometryutil.js')
-        p.require('placementworker.js')
-        p.require('clipper.js')
         
         self = this
         spawncount = 0
@@ -339,7 +318,9 @@ class SvgNest:
             return Parallel.prototype._spawnMapWorker.call(p, i, cb, done, env, wrk)
 
         p._spawnMapWorker = _spawnMapWorker
+        """
 
+        pool = multiprocessing.Pool()
 
         def p_map(pair):
             if not pair or len(pair) == 0:
@@ -529,7 +510,11 @@ class SvgNest:
 
             p2.map(worker.placePaths).then(p2_map, print_fn)
 
-        p.map(p_map).then(p_then, print_fn)
+        try:
+            data = p.map(p_map)
+            p_then(data)
+        finally:
+            p.close()
 
     # assuming no intersections, return a tree where odd leaves are parts and even ones are holes
     # might be easier to use the DOM, but paths can't have paths as children. So we'll just make our own tree.
@@ -543,9 +528,9 @@ class SvgNest:
         for i in range(0, numChildren):
             poly = this.parser.polygonify(paths[i])
             poly = Polygon(this.cleanPolygon(poly))
-            
+
             # todo: warn user if poly could not be processed and is excluded from the nest
-            if poly and len(poly) > 2 and abs(polygonArea(poly)) > this.config.curveTolerance**2 :
+            if poly and len(poly) > 2 and abs(polygonArea(poly)) > this.config.curveTolerance**2:
                 poly.source = i
                 polygons.append(poly)
 
@@ -660,7 +645,7 @@ class SvgNest:
 
         normal = scale_from_clipper(polygon, self.config.clipperScale)
 
-        return [Point(x=polygon[0], y=polygon[1]) for polygon in normal]
+        return Polygon([Point(x=polygon[0], y=polygon[1]) for polygon in normal])
 
     # returns an array of SVG elements that represent the placement, for export or rendering
     def applyPlacement(this, placement):
@@ -721,24 +706,35 @@ class SvgNest:
     def stop(this):
         this.working = False
         if this.workerTimer:
-            clearInterval(workerTimer)
+            # clearInterval(workerTimer)
+            pass
+
+
+class Individual:
+
+    def __init__(self, placement=None, rotation=None):
+        self.placement = placement
+        self.rotation = rotation
+        self.fitness = 0
+
 
 class GeneticAlgorithm:
 
     def __init__(this, adam, bin, config):
         this.config = config or { 'populationSize': 10, 'mutationRate': 10, 'rotations': 4 }
-        this.binBounds = GeometryUtil.getPolygonBounds(bin)
+        this.binBounds = getPolygonBounds(bin)
 
-        # population is an array of individuals. Each individual is a object representing the order of insertion and the angle each part is rotated
+        # population is an array of individuals. Each individual is a object representing the order
+        # of insertion and the angle each part is rotated
         angles = []
         for i in range(0, len(adam)):
             angles.append(this.randomAngle(adam[i]))
 
-        this.population = [{placement: adam, rotation: angles}]
+        this.population = [Individual(placement= adam, rotation= angles)]
 
         while len(this.population) < config.populationSize:
             mutant = this.mutate(this.population[0])
-            this.population.push(mutant)
+            this.population.append(mutant)
 
     # returns a random angle of insertion
     def randomAngle(this, part):
@@ -748,8 +744,8 @@ class GeneticAlgorithm:
             angleList.append(i*(360/this.config.rotations))
 
         def shuffleArray(array):
-            for i in range(array.length - 1, 0):
-                j = math.floor(math.random() * (i + 1))
+            for i in range(len(array) - 1, 0):
+                j = math.floor(random() * (i + 1))
                 temp = array[i]
                 array[i] = array[j]
                 array[j] = temp
@@ -758,7 +754,7 @@ class GeneticAlgorithm:
         angleList = shuffleArray(angleList)
 
         for i in range(0, len(angleList)):
-            rotatedPart = GeometryUtil.rotatePolygon(part, angleList[i])
+            rotatedPart = rotatePolygon(part, angleList[i])
 
             # don't use obviously bad angles where the part doesn't fit in the bin
             if rotatedPart.width < this.binBounds.width and rotatedPart.height < this.binBounds.height:
@@ -768,21 +764,21 @@ class GeneticAlgorithm:
 
     # returns a mutated individual with the given mutation rate
     def mutate(this, individual):
-        clone = {'placement': individual.placement.slice(0), 'rotation': individual.rotation.slice(0)}
-        for i in range(0, len(clone.placement)):
-            rand = math.random()
+        clone = Individual(placement=individual.placement[:], rotation=individual.rotation[:])
+        for i, clone_placement in enumerate(clone.placement):
+            rand = random()
             if rand < 0.01 * this.config.mutationRate:
                 # swap current part with next part
-                j = i+1
+                j = i + 1
 
                 if j < len(clone.placement):
-                    temp = clone.placement[i]
+                    temp = clone_placement
                     clone.placement[i] = clone.placement[j]
                     clone.placement[j] = temp
 
-            rand = Math.random()
+            rand = random()
             if rand < 0.01 * this.config.mutationRate:
-                clone.rotation[i] = this.randomAngle(clone.placement[i])
+                clone.rotation[i] = this.randomAngle(clone_placement)
 
         return clone
 
