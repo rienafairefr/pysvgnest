@@ -6,54 +6,52 @@ Licensed under the MIT license
 import math
 
 from svgnest.js.geometry import Segment, Point, Arc, PolygonBound, Vector, Polygon
+from svgnest.js.utils import splice, log
 
 TOL = pow(10, -9)  # Floating point error is likely to be above 1 epsilon
 
 
-def _almostEqual(a, b, tolerance=TOL):
+def _almost_equal(a, b, tolerance=TOL):
     return abs(a - b) < tolerance
 
 
-def _withinDistance(p1, p2, distance):
+def _within_distance(p1, p2, distance):
     dx = p1.x - p2.x
     dy = p1.y - p2.y
     return (dx * dx + dy * dy) < distance * distance
 
 
-def _degreesToRadians(angle):
+def _degrees_to_radians(angle):
     return angle * math.pi / 180
 
 
-def _radiansToDegrees(angle):
+def _radians_to_degrees(angle):
     return angle * 180 / math.pi
 
 
 # normalize vector into a unit vector
-def _normalizeVector(v):
-    if _almostEqual(v.x * v.x + v.y * v.y, 1):
+def _normalize_vector(v):
+    if _almost_equal(v.x * v.x + v.y * v.y, 1):
         return v  # given vector was already a unit vector
     len = math.sqrt(v.x * v.x + v.y * v.y)
     inverse = 1 / len
 
-    return {
-        'x': v.x * inverse,
-        'y': v.y * inverse
-    }
+    return Point(x= v.x * inverse, y= v.y * inverse)
 
 
 # returns True if p lies on the line segment defined by AB, but not at any endpoints
 # may need work!
-def _onSegment(A, B, p):
+def _on_segment(A, B, p):
     # vertical line
-    if _almostEqual(A.x, B.x) and _almostEqual(p.x, A.x):
-        if not _almostEqual(p.y, B.y) and not _almostEqual(p.y, A.y) and max(B.y, A.y) > p.y > min(B.y, A.y):
+    if _almost_equal(A.x, B.x) and _almost_equal(p.x, A.x):
+        if not _almost_equal(p.y, B.y) and not _almost_equal(p.y, A.y) and max(B.y, A.y) > p.y > min(B.y, A.y):
             return True
         else:
             return False
 
     # horizontal line
-    if _almostEqual(A.y, B.y) and _almostEqual(p.y, A.y):
-        if not _almostEqual(p.x, B.x) and not _almostEqual(p.x, A.x) and max(B.x, A.x) > p.x > min(B.x, A.x):
+    if _almost_equal(A.y, B.y) and _almost_equal(p.y, A.y):
+        if not _almost_equal(p.x, B.x) and not _almost_equal(p.x, A.x) and max(B.x, A.x) > p.x > min(B.x, A.x):
             return True
         else:
             return False
@@ -63,7 +61,7 @@ def _onSegment(A, B, p):
         return False
 
     # exclude end points
-    if (_almostEqual(p.x, A.x) and _almostEqual(p.y, A.y)) or (_almostEqual(p.x, B.x) and _almostEqual(p.y, B.y)):
+    if (_almost_equal(p.x, A.x) and _almost_equal(p.y, A.y)) or (_almost_equal(p.x, B.x) and _almost_equal(p.y, B.y)):
         return False
 
     cross = (p.y - A.y) * (B.x - A.x) - (p.x - A.x) * (B.y - A.y)
@@ -73,12 +71,12 @@ def _onSegment(A, B, p):
 
     dot = (p.x - A.x) * (B.x - A.x) + (p.y - A.y) * (B.y - A.y)
 
-    if dot < 0 or _almostEqual(dot, 0):
+    if dot < 0 or _almost_equal(dot, 0):
         return False
 
     len2 = (B.x - A.x) * (B.x - A.x) + (B.y - A.y) * (B.y - A.y)
 
-    if dot > len2 or _almostEqual(dot, len2):
+    if dot > len2 or _almost_equal(dot, len2):
         return False
 
     return True
@@ -86,8 +84,9 @@ def _onSegment(A, B, p):
 
 # returns the intersection of AB and EF
 # or None if there are no intersections or other numerical error
-# if the infinite flag is set, AE and EF describe infinite lines without endpoints, they are finite line segments otherwise
-def _lineIntersect(A, B, E, F, infinite):
+# if the infinite flag is set, AE and EF describe infinite lines without endpoints,
+# they are finite line segments otherwise
+def _line_intersect(A, B, E, F, infinite):
     a1, a2, b1, b2, c1, c2, x, y = 0, 0, 0, 0, 0, 0, 0, 0
 
     a1 = B.y - A.y
@@ -102,9 +101,7 @@ def _lineIntersect(A, B, E, F, infinite):
     x = (b1 * c2 - b2 * c1) / denom
     y = (a2 * c1 - a1 * c2) / denom
 
-    isFinite = GeometryUtil.isFinite
-
-    if not isFinite(x) or not isFinite(y):
+    if not math.isfinite(x) or not math.isfinite(y):
         return None
 
     # lines are colinear
@@ -133,30 +130,30 @@ class GeometryUtil:
 
     @staticmethod
     def almostEqual(a, b, tolerance=TOL):
-        return _almostEqual(a, b, tolerance)
+        return _almost_equal(a, b, tolerance)
 
     @staticmethod
     def withinDistance(p1, p2, distance):
-        return _withinDistance(p1, p2, distance)
+        return _within_distance(p1, p2, distance)
 
     @staticmethod
     def degreesToRadians(angle):
-        return _degreesToRadians(angle)
+        return _degrees_to_radians(angle)
 
     @staticmethod
     def radiansToDegrees(angle):
-        return _radiansToDegrees(angle)
+        return _radians_to_degrees(angle)
 
     @staticmethod
     def normalizeVector(v):
-        return _normalizeVector(v)
+        return _normalize_vector(v)
 
 
 class QuadraticBezier:
 
     # Roger Willcocks bezier flatness criterion
     @staticmethod
-    def isFlat(p1, p2, c1, tol):
+    def is_flat(p1, p2, c1, tol):
         tol = 4 * tol * tol
 
         ux = 2 * c1.x - p1.x - p2.x
@@ -177,7 +174,7 @@ class QuadraticBezier:
         while len(todo) > 0:
             segment = todo[0]
 
-            if cls.isFlat(segment.p1, segment.p2, segment.c1, tol):  # reached subdivision limit
+            if cls.is_flat(segment.p1, segment.p2, segment.c1, tol):  # reached subdivision limit
                 finished.append(Point(x=segment.p2.x, y=segment.p2.y))
                 todo.shift()
             else:
@@ -212,7 +209,7 @@ class QuadraticBezier:
 
 class CubicBezier:
     @classmethod
-    def isFlat(cls, p1, p2, c1, c2, tol):
+    def is_flat(cls, p1, p2, c1, c2, tol):
         tol = 16 * tol * tol
 
         ux = 3 * c1.x - 2 * p1.x - p2.x
@@ -237,19 +234,20 @@ class CubicBezier:
     @classmethod
     def linearize(cls, p1, p2, c1, c2, tol):
         finished = [p1]  # list of points to return
-        todo = [{p1: p1, p2: p2, c1: c1, c2: c2}]  # list of Beziers to divide
+        todo = [Segment(p1=p1, p2=p2, c1=c1, c2=c2)]  # list of Beziers to divide
 
         # recursion could stack overflow, loop instead
 
         while len(todo) > 0:
+            log('linearizing bezier... %s' % len(todo))
             segment = todo[0]
 
-            if cls.isFlat(segment.p1, segment.p2, segment.c1, segment.c2, tol):  # reached subdivision limit
-                finished.push(Point(x=segment.p2.x, y=segment.p2.y))
-                todo.shift()
+            if cls.is_flat(segment.p1, segment.p2, segment.c1, segment.c2, tol):  # reached subdivision limit
+                finished.append(Point(x=segment.p2.x, y=segment.p2.y))
+                todo.pop(0)
             else:
                 divided = cls.subdivide(segment.p1, segment.p2, segment.c1, segment.c2, 0.5)
-                todo.splice(0, 1, divided[0], divided[1])
+                splice(todo, 0, 1, divided[0], divided[1])
         return finished
 
     @classmethod
@@ -284,26 +282,26 @@ class CubicBezier:
             y=mida.y + (midb.y - mida.y) * t
         )
 
-        seg1 = Segment(p1, midx, mid1, mida)
-        seg2 = Segment(p1, p2, midb, mid2)
+        seg1 = Segment(p1=p1, p2=midx, c1=mid1, c2=mida)
+        seg2 = Segment(p1=midx, p2=p2, c1=midb, c2=mid2)
 
         return [seg1, seg2]
 
 
 class Arc:
-    def linearize(this, p1, p2, rx, ry, angle, largearc, sweep, tol):
+    def linearize(self, p1, p2, rx, ry, angle, largearc, sweep, tol):
 
         finished = [p2]  # list of points to return
 
-        arc = this.svgToCenter(p1, p2, rx, ry, angle, largearc, sweep)
+        arc = self.svgToCenter(p1, p2, rx, ry, angle, largearc, sweep)
         todo = [arc]  # list of arcs to divide
 
         # recursion could stack overflow, loop instead
         while len(todo) > 0:
             arc = todo[0]
 
-            fullarc = this.centerToSvg(arc.center, arc.rx, arc.ry, arc.theta, arc.extent, arc.angle)
-            subarc = this.centerToSvg(arc.center, arc.rx, arc.ry, arc.theta, 0.5 * arc.extent, arc.angle)
+            fullarc = self.center_to_svg(arc.center, arc.rx, arc.ry, arc.theta, arc.extent, arc.angle)
+            subarc = self.center_to_svg(arc.center, arc.rx, arc.ry, arc.theta, 0.5 * arc.extent, arc.angle)
             arcmid = subarc.p2
 
             mid = Point(
@@ -313,7 +311,7 @@ class Arc:
 
             # compare midpoint of line with midpoint of arc
             # this is not 100% accurate, but should be a good heuristic for flatness in most cases
-            if _withinDistance(mid, arcmid, tol):
+            if _within_distance(mid, arcmid, tol):
                 finished.unshift(fullarc.p2)
                 todo.shift()
             else:
@@ -338,13 +336,13 @@ class Arc:
 
     # convert from center point/angle sweep definition to SVG point and flag definition of arcs
     # ported from http://commons.oreilly.com/wiki/index.php/SVG_Essentials/Paths
-    def centerToSvg(this, center, rx, ry, theta1, extent, angleDegrees):
+    def center_to_svg(self, center, rx, ry, theta1, extent, angleDegrees):
 
         theta2 = theta1 + extent
 
-        theta1 = _degreesToRadians(theta1)
-        theta2 = _degreesToRadians(theta2)
-        angle = _degreesToRadians(angleDegrees)
+        theta1 = _degrees_to_radians(theta1)
+        theta2 = _degrees_to_radians(theta2)
+        angle = _degrees_to_radians(angleDegrees)
 
         cos = math.cos(angle)
         sin = math.sin(angle)
@@ -388,7 +386,7 @@ class Arc:
             y=0.5 * (p2.y - p1.y)
         )
 
-        angle = _degreesToRadians(angleDegrees % 360)
+        angle = _degrees_to_radians(angleDegrees % 360)
 
         cos = math.cos(angle)
         sin = math.sin(angle)
@@ -432,13 +430,13 @@ class Arc:
         sign = -1 if uy < 0 else 1
 
         theta = sign * math.acos(p / n)
-        theta = _radiansToDegrees(theta)
+        theta = _radians_to_degrees(theta)
 
         n = math.sqrt((ux * ux + uy * uy) * (vx * vx + vy * vy))
         p = ux * vx + uy * vy
         sign = -1 if ((ux * vy - uy * vx) < 0) else 1
         delta = sign * math.acos(p / n)
-        delta = _radiansToDegrees(delta)
+        delta = _radians_to_degrees(delta)
 
         if sweep == 1 and delta > 0:
             delta -= 360
@@ -459,7 +457,7 @@ class Arc:
 
 
 # returns the rectangular bounding box of the given polygon
-def getPolygonBounds(polygon):
+def get_polygon_bounds(polygon):
     if not polygon or len(polygon) < 3:
         return None
 
@@ -488,7 +486,7 @@ def getPolygonBounds(polygon):
 
 
 # return True if point is in the polygon, False if outside, and None if exactly on a point or edge
-def pointInPolygon(point, polygon):
+def point_in_polygon(point, polygon):
     if not polygon or len(polygon) < 3:
         return None
 
@@ -507,19 +505,18 @@ def pointInPolygon(point, polygon):
         xj = polygon[j].x + offsetx
         yj = polygon[j].y + offsety
 
-        if _almostEqual(xi, point.x) and _almostEqual(yi, point.y):
+        if _almost_equal(xi, point.x) and _almost_equal(yi, point.y):
             return None  # no result
 
-        if _onSegment(Point(xi, yi), Point(xj, yj), point):
+        if _on_segment(Point(xi, yi), Point(xj, yj), point):
             return None  # exactly on the segment
 
-        if _almostEqual(xi, xj) and _almostEqual(yi, yj):  # ignore very small lines
+        if _almost_equal(xi, xj) and _almost_equal(yi, yj):  # ignore very small lines
             i += 1
             j = i
             continue
 
-        intersect = ((yi > point.y) != (yj > point.y)) and (point.x < (xj - xi) * (point.y - yi) / (yj - yi) + xi)
-        if (intersect):
+        if ((yi > point.y) != (yj > point.y)) and (point.x < (xj - xi) * (point.y - yi) / (yj - yi) + xi):
             inside = not inside
 
         i += 1
@@ -530,7 +527,7 @@ def pointInPolygon(point, polygon):
 
 # returns the area of the polygon, assuming no self-intersections
 # a negative area indicates counter-clockwise winding direction
-def polygonArea(polygon):
+def polygon_area(polygon):
     area = 0
     i = 0
     j = len(polygon) - 1
@@ -554,8 +551,8 @@ def intersect(A, B):
     Boffsetx = B.offsetx or 0
     Boffsety = B.offsety or 0
 
-    A = A.slice(0)
-    B = B.slice(0)
+    A = A[:]
+    B = B[:]
 
     for i in range(0, len(A) - 1):
         for j in range(0, len(B) - 1):
@@ -564,27 +561,27 @@ def intersect(A, B):
             b1 = Point(B[j].x + Boffsetx, B[j].y + Boffsety)
             b2 = Point(B[j + 1].x + Boffsetx, B[j + 1].y + Boffsety)
 
-            prevbindex = B.length - 1 if j == 0 else j - 1
-            prevaindex = A.length - 1 if i == 0 else i - 1
-            nextbindex = 0 if (j + 1 == B.length - 1) else j + 2
-            nextaindex = 0 if (i + 1 == A.length - 1) else i + 2
+            prevbindex = len(B) - 1 if j == 0 else j - 1
+            prevaindex = len(A) - 1 if i == 0 else i - 1
+            nextbindex = 0 if (j + 1 == len(B) - 1) else j + 2
+            nextaindex = 0 if (i + 1 == len(A) - 1) else i + 2
 
             # go even further back if we happen to hit on a loop end point
             if B[prevbindex] == B[j] or (
-                    _almostEqual(B[prevbindex].x, B[j].x) and _almostEqual(B[prevbindex].y, B[j].y)):
+                    _almost_equal(B[prevbindex].x, B[j].x) and _almost_equal(B[prevbindex].y, B[j].y)):
                 prevbindex = B.length - 1 if (prevbindex == 0) else prevbindex - 1
 
             if A[prevaindex] == A[i] or (
-                    _almostEqual(A[prevaindex].x, A[i].x) and _almostEqual(A[prevaindex].y, A[i].y)):
+                    _almost_equal(A[prevaindex].x, A[i].x) and _almost_equal(A[prevaindex].y, A[i].y)):
                 prevaindex = A.length - 1 if (prevaindex == 0) else prevaindex - 1
 
             # go even further forward if we happen to hit on a loop end point
             if B[nextbindex] == B[j + 1] or (
-                    _almostEqual(B[nextbindex].x, B[j + 1].x) and _almostEqual(B[nextbindex].y, B[j + 1].y)):
+                    _almost_equal(B[nextbindex].x, B[j + 1].x) and _almost_equal(B[nextbindex].y, B[j + 1].y)):
                 nextbindex = 0 if (nextbindex == B.length - 1) else nextbindex + 1
 
             if A[nextaindex] == A[i + 1] or (
-                    _almostEqual(A[nextaindex].x, A[i + 1].x) and _almostEqual(A[nextaindex].y, A[i + 1].y)):
+                    _almost_equal(A[nextaindex].x, A[i + 1].x) and _almost_equal(A[nextaindex].y, A[i + 1].y)):
                 nextaindex = 0 if (nextaindex == A.length - 1) else nextaindex + 1
 
             a0 = Point(A[prevaindex].x + Aoffsetx, A[prevaindex].y + Aoffsety)
@@ -593,46 +590,46 @@ def intersect(A, B):
             a3 = Point(A[nextaindex].x + Aoffsetx, A[nextaindex].y + Aoffsety)
             b3 = Point(B[nextbindex].x + Boffsetx, B[nextbindex].y + Boffsety)
 
-            if _onSegment(a1, a2, b1) or (_almostEqual(a1.x, b1.x) and _almostEqual(a1.y, b1.y)):
+            if _on_segment(a1, a2, b1) or (_almost_equal(a1.x, b1.x) and _almost_equal(a1.y, b1.y)):
                 # if a point is on a segment, it could intersect or it could not. Check via the neighboring points
-                b0in = pointInPolygon(b0, A)
-                b2in = pointInPolygon(b2, A)
-                if (b0in == True and b2in == False) or (b0in == False and b2in == True):
+                b0in = point_in_polygon(b0, A)
+                b2in = point_in_polygon(b2, A)
+                if (b0in and not b2in) or (not b0in and b2in):
                     return True
                 else:
                     continue
 
-            if _onSegment(a1, a2, b2) or (_almostEqual(a2.x, b2.x) and _almostEqual(a2.y, b2.y)):
+            if _on_segment(a1, a2, b2) or (_almost_equal(a2.x, b2.x) and _almost_equal(a2.y, b2.y)):
                 # if a point is on a segment, it could intersect or it could not. Check via the neighboring points
-                b1in = pointInPolygon(b1, A)
-                b3in = pointInPolygon(b3, A)
+                b1in = point_in_polygon(b1, A)
+                b3in = point_in_polygon(b3, A)
 
-                if (b1in == True and b3in == False) or (b1in == False and b3in == True):
+                if (b1in  and not b3in ) or (not b1in and b3in):
                     return True
                 else:
                     continue
 
-            if _onSegment(b1, b2, a1) or (_almostEqual(a1.x, b2.x) and _almostEqual(a1.y, b2.y)):
+            if _on_segment(b1, b2, a1) or (_almost_equal(a1.x, b2.x) and _almost_equal(a1.y, b2.y)):
                 # if a point is on a segment, it could intersect or it could not. Check via the neighboring points
-                a0in = pointInPolygon(a0, B)
-                a2in = pointInPolygon(a2, B)
+                a0in = point_in_polygon(a0, B)
+                a2in = point_in_polygon(a2, B)
 
-                if (a0in == True and a2in == False) or (a0in == False and a2in == True):
+                if (a0in and not a2in) or (not a0in and a2in):
                     return True
             else:
                 continue
 
-            if _onSegment(b1, b2, a2) or (_almostEqual(a2.x, b1.x) and _almostEqual(a2.y, b1.y)):
+            if _on_segment(b1, b2, a2) or (_almost_equal(a2.x, b1.x) and _almost_equal(a2.y, b1.y)):
                 # if a point is on a segment, it could intersect or it could not. Check via the neighboring points
-                a1in = pointInPolygon(a1, B)
-                a3in = pointInPolygon(a3, B)
+                a1in = point_in_polygon(a1, B)
+                a3in = point_in_polygon(a3, B)
 
-                if (a1in == True and a3in == False) or (a1in == False and a3in == True):
+                if (a1in and not a3in ) or (not a1in and a3in):
                     return True
                 else:
                     continue
 
-            p = _lineIntersect(b1, b2, a1, a2)
+            p = _line_intersect(b1, b2, a1, a2)
 
             if p is not None:
                 return True
@@ -645,11 +642,11 @@ def intersect(A, B):
 # returns a continuous polyline representing the normal-most edge of the given polygon
 # eg. a normal vector of [-1, 0] will return the left-most edge of the polygon
 # this is essentially algo 8 in [1], generalized for any vector direction
-def polygonEdge(polygon, normal):
+def polygon_edge(polygon, normal):
     if not polygon or len(polygon) < 3:
         return None
 
-    normal = _normalizeVector(normal)
+    normal = _normalize_vector(normal)
 
     direction = Point(
         x=-normal.y,
@@ -662,29 +659,30 @@ def polygonEdge(polygon, normal):
 
     dotproduct = []
 
-    for i in range(0, len(polygon)):
-        dot = polygon[i].x * direction.x + polygon[i].y * direction.y
+    for point in polygon:
+        dot = point.x * direction.x + point.y * direction.y
         dotproduct.append(dot)
         if min is None or dot < min:
             min = dot
         if max is None or dot > max:
             max = dot
 
-    # there may be multiple vertices with min/max values. In which case we choose the one that is normal-most (eg. left most)
+    # there may be multiple vertices with min/max values.
+    # in which case we choose the one that is normal-most (eg. left most)
     indexmin = 0
     indexmax = 0
 
     normalmin = None
     normalmax = None
 
-    for i in range(0, len(polygon)):
-        if (_almostEqual(dotproduct[i], min)):
-            dot = polygon[i].x * normal.x + polygon[i].y * normal.y
+    for i, point in enumerate(polygon):
+        if _almost_equal(dotproduct[i], min):
+            dot = polygon[i].x * normal.x + point.y * normal.y
             if (normalmin is None or dot > normalmin):
                 normalmin = dot
                 indexmin = i
-        elif (_almostEqual(dotproduct[i], max)):
-            dot = polygon[i].x * normal.x + polygon[i].y * normal.y
+        elif _almost_equal(dotproduct[i], max):
+            dot = polygon[i].x * normal.x + point.y * normal.y
             if (normalmax is None or dot > normalmax):
                 normalmax = dot
                 indexmax = i
@@ -719,15 +717,15 @@ def polygonEdge(polygon, normal):
     # -1 = left, 1 = right
     scandirection = -1
 
-    if _almostEqual(dotleft, 0):
+    if _almost_equal(dotleft, 0):
         scandirection = 1
-    elif _almostEqual(dotright, 0):
+    elif _almost_equal(dotright, 0):
         scandirection = -1
     else:
         normaldotleft = None
         normaldotright = None
 
-        if _almostEqual(dotleft, dotright):
+        if _almost_equal(dotleft, dotright):
             # the points line up exactly along the normal vector
             normaldotleft = leftvector.x * normal.x + leftvector.y * normal.y
             normaldotright = rightvector.x * normal.x + rightvector.y * normal.y
@@ -772,9 +770,8 @@ def polygonEdge(polygon, normal):
 # this is basically algo 9 in [1], generalized for any vector direction
 # eg. normal of [-1, 0] returns the horizontal distance between the point and the line segment
 # sxinclusive: if True, include endpoints instead of excluding them
-
-def pointLineDistance(p, s1, s2, normal, s1inclusive, s2inclusive):
-    normal = _normalizeVector(normal)
+def point_line_distance(p, s1, s2, normal, s1inclusive, s2inclusive):
+    normal = _normalize_vector(normal)
 
     dir = Vector(
         x=normal.y,
@@ -790,12 +787,12 @@ def pointLineDistance(p, s1, s2, normal, s1inclusive, s2inclusive):
     s2dotnorm = s2.x * normal.x + s2.y * normal.y
 
     # point is exactly along the edge in the normal direction
-    if _almostEqual(pdot, s1dot) and _almostEqual(pdot, s2dot):
+    if _almost_equal(pdot, s1dot) and _almost_equal(pdot, s2dot):
         # point lies on an endpoint
-        if _almostEqual(pdotnorm, s1dotnorm):
+        if _almost_equal(pdotnorm, s1dotnorm):
             return None
 
-        if _almostEqual(pdotnorm, s2dotnorm):
+        if _almost_equal(pdotnorm, s2dotnorm):
             return None
 
         # point is outside both endpoints
@@ -812,12 +809,12 @@ def pointLineDistance(p, s1, s2, normal, s1inclusive, s2inclusive):
         else:
             return diff2
     # point
-    elif _almostEqual(pdot, s1dot):
+    elif _almost_equal(pdot, s1dot):
         if s1inclusive:
             return pdotnorm - s1dotnorm
         else:
             return None
-    elif _almostEqual(pdot, s2dot):
+    elif _almost_equal(pdot, s2dot):
         if s2inclusive:
             return pdotnorm - s2dotnorm
         else:
@@ -825,11 +822,11 @@ def pointLineDistance(p, s1, s2, normal, s1inclusive, s2inclusive):
     elif (pdot < s1dot and pdot < s2dot) or (pdot > s1dot and pdot > s2dot):
         return None  # point doesn't collide with segment
 
-    return (pdotnorm - s1dotnorm + (s1dotnorm - s2dotnorm) * (s1dot - pdot) / (s1dot - s2dot))
+    return pdotnorm - s1dotnorm + (s1dotnorm - s2dotnorm) * (s1dot - pdot) / (s1dot - s2dot)
 
 
-def pointDistance(p, s1, s2, normal, infinite):
-    normal = _normalizeVector(normal)
+def point_distance(p, s1, s2, normal, infinite=None):
+    normal = _normalize_vector(normal)
 
     dir = Vector(
         x=normal.y,
@@ -845,20 +842,20 @@ def pointDistance(p, s1, s2, normal, infinite):
     s2dotnorm = s2.x * normal.x + s2.y * normal.y
 
     if not infinite:
-        if ((pdot < s1dot or _almostEqual(pdot, s1dot)) and (pdot < s2dot or _almostEqual(pdot, s2dot))) or (
-                (pdot > s1dot or _almostEqual(pdot, s1dot)) and (pdot > s2dot or _almostEqual(pdot, s2dot))):
+        if ((pdot < s1dot or _almost_equal(pdot, s1dot)) and (pdot < s2dot or _almost_equal(pdot, s2dot))) or (
+                (pdot > s1dot or _almost_equal(pdot, s1dot)) and (pdot > s2dot or _almost_equal(pdot, s2dot))):
             return None  # dot doesn't collide with segment, or lies directly on the vertex
-        if (_almostEqual(pdot, s1dot) and _almostEqual(pdot, s2dot)) and (
+        if (_almost_equal(pdot, s1dot) and _almost_equal(pdot, s2dot)) and (
                 pdotnorm > s1dotnorm and pdotnorm > s2dotnorm):
             return min(pdotnorm - s1dotnorm, pdotnorm - s2dotnorm)
-        if (_almostEqual(pdot, s1dot) and _almostEqual(pdot, s2dot)) and (
+        if (_almost_equal(pdot, s1dot) and _almost_equal(pdot, s2dot)) and (
                 pdotnorm < s1dotnorm and pdotnorm < s2dotnorm):
             return -min(s1dotnorm - pdotnorm, s2dotnorm - pdotnorm)
 
     return -(pdotnorm - s1dotnorm + (s1dotnorm - s2dotnorm) * (s1dot - pdot) / (s1dot - s2dot))
 
 
-def segmentDistance(A, B, E, F, direction):
+def segment_distance(A, B, E, F, direction):
     normal = Vector(
         x=direction.y,
         y=-direction.x
@@ -879,12 +876,6 @@ def segmentDistance(A, B, E, F, direction):
     crossE = E.x * direction.x + E.y * direction.y
     crossF = F.x * direction.x + F.y * direction.y
 
-    crossABmin = min(crossA, crossB)
-    crossABmax = max(crossA, crossB)
-
-    crossEFmax = max(crossE, crossF)
-    crossEFmin = min(crossE, crossF)
-
     ABmin = min(dotA, dotB)
     ABmax = max(dotA, dotB)
 
@@ -892,13 +883,11 @@ def segmentDistance(A, B, E, F, direction):
     EFmin = min(dotE, dotF)
 
     # segments that will merely touch at one point
-    if _almostEqual(ABmax, EFmin, TOL) or _almostEqual(ABmin, EFmax, TOL):
+    if _almost_equal(ABmax, EFmin, TOL) or _almost_equal(ABmin, EFmax, TOL):
         return None
     # segments miss eachother completely
     if ABmax < EFmin or ABmin > EFmax:
         return None
-
-    overlap = None
 
     if (ABmax > EFmax and ABmin < EFmin) or (EFmax > ABmax and EFmin < ABmin):
         overlap = 1
@@ -915,7 +904,7 @@ def segmentDistance(A, B, E, F, direction):
     crossABF = (F.y - A.y) * (B.x - A.x) - (F.x - A.x) * (B.y - A.y)
 
     # lines are colinear
-    if _almostEqual(crossABE, 0) and _almostEqual(crossABF, 0):
+    if _almost_equal(crossABE, 0) and _almost_equal(crossABF, 0):
 
         ABnorm = Vector(B.y - A.y, A.x - B.x)
         EFnorm = Vector(F.y - E.y, E.x - F.x)
@@ -929,75 +918,75 @@ def segmentDistance(A, B, E, F, direction):
         EFnorm.y /= EFnormlength
 
         # segment normals must point in opposite directions
-        if (abs(ABnorm.y * EFnorm.x - ABnorm.x * EFnorm.y) < TOL and ABnorm.y * EFnorm.y + ABnorm.x * EFnorm.x < 0):
+        if abs(ABnorm.y * EFnorm.x - ABnorm.x * EFnorm.y) < TOL and ABnorm.y * EFnorm.y + ABnorm.x * EFnorm.x < 0:
             # normal of AB segment must point in same direction as given direction vector
             normdot = ABnorm.y * direction.y + ABnorm.x * direction.x
             # the segments merely slide along eachother
-            if _almostEqual(normdot, 0, TOL):
+            if _almost_equal(normdot, 0, TOL):
                 return None
-            if (normdot < 0):
+            if normdot < 0:
                 return 0
         return None
 
     distances = []
 
     # coincident points
-    if _almostEqual(dotA, dotE):
+    if _almost_equal(dotA, dotE):
         distances.push(crossA - crossE)
-    elif (_almostEqual(dotA, dotF)):
+    elif _almost_equal(dotA, dotF):
         distances.push(crossA - crossF)
-    elif (dotA > EFmin and dotA < EFmax):
-        d = pointDistance(A, E, F, reverse)
-        if (d is not None and _almostEqual(d, 0)):  # A currently touches EF, but AB is moving away from EF
-            dB = pointDistance(B, E, F, reverse, True)
-            if dB < 0 or _almostEqual(dB * overlap, 0):
-                d = None
-        if (d is not None):
-            distances.append(d)
-
-    if _almostEqual(dotB, dotE):
-        distances.append(crossB - crossE)
-    elif _almostEqual(dotB, dotF):
-        distances.append(crossB - crossF)
-    elif dotB > EFmin and dotB < EFmax:
-        d = pointDistance(B, E, F, reverse)
-
-        if (d is not None and _almostEqual(d,
-                                           0)):  # crossA>crossB A currently touches EF, but AB is moving away from EF
-            dA = pointDistance(A, E, F, reverse, True)
-            if dA < 0 or _almostEqual(dA * overlap, 0):
-                d = None
-        if (d is not None):
-            distances.append(d)
-
-    if dotE > ABmin and dotE < ABmax:
-        d = pointDistance(E, A, B, direction)
-        if d is not None and _almostEqual(d, 0):  # crossF<crossE A currently touches EF, but AB is moving away from EF
-            dF = pointDistance(F, A, B, direction, True)
-            if dF < 0 or _almostEqual(dF * overlap, 0):
+    elif EFmin < dotA < EFmax:
+        d = point_distance(A, E, F, reverse)
+        # A currently touches EF, but AB is moving away from EF
+        if d is not None and GeometryUtil.almostEqual(d, 0):
+            dB = point_distance(B, E, F, reverse, True)
+            if dB < 0 or _almost_equal(dB * overlap, 0):
                 d = None
         if d is not None:
             distances.append(d)
 
-    if dotF > ABmin and dotF < ABmax:
-        d = pointDistance(F, A, B, direction)
-        if d is not None and _almostEqual(d,
-                                          0):  # and crossE<crossF A currently touches EF, but AB is moving away from EF
-            dE = pointDistance(E, A, B, direction, True)
-            if (dE < 0 or _almostEqual(dE * overlap, 0)):
+    if _almost_equal(dotB, dotE):
+        distances.append(crossB - crossE)
+    elif _almost_equal(dotB, dotF):
+        distances.append(crossB - crossF)
+    elif EFmin < dotB < EFmax:
+        d = point_distance(B, E, F, reverse)
+
+        # crossA>crossB A currently touches EF, but AB is moving away from EF
+        if d is not None and _almost_equal(d, 0):
+            dA = point_distance(A, E, F, reverse, True)
+            if dA < 0 or _almost_equal(dA * overlap, 0):
                 d = None
-        if (d is not None):
+        if d is not None:
             distances.append(d)
 
-    if (len(distances) == 0):
+    if ABmin < dotE < ABmax:
+        d = point_distance(E, A, B, direction)
+        # crossF<crossE A currently touches EF, but AB is moving away from EF
+        if d is not None and _almost_equal(d, 0):
+            dF = point_distance(F, A, B, direction, True)
+            if dF < 0 or _almost_equal(dF * overlap, 0):
+                d = None
+        if d is not None:
+            distances.append(d)
+
+    if ABmin < dotF < ABmax:
+        d = point_distance(F, A, B, direction)
+        # and crossE<crossF A currently touches EF, but AB is moving away from EF
+        if d is not None and _almost_equal(d,0):
+            dE = point_distance(E, A, B, direction, True)
+            if dE < 0 or _almost_equal(dE * overlap, 0):
+                d = None
+        if d is not None:
+            distances.append(d)
+
+    if len(distances) == 0:
         return None
 
-    return min.apply(math, distances)
+    return min(distances)
 
 
-def polygonSlideDistance(A, B, direction, ignoreNegative):
-    A1, A2, B1, B2, Aoffsetx, Aoffsety, Boffsetx, Boffsety = None, None, None, None, None, None, None, None
-
+def polygon_slide_distance(A, B, direction, ignoreNegative):
     Aoffsetx = A.offsetx or 0
     Aoffsety = A.offsety or 0
 
@@ -1018,9 +1007,8 @@ def polygonSlideDistance(A, B, direction, ignoreNegative):
     edgeB = B
 
     distance = None
-    p, s1, s2, d = None, None, None, None
 
-    dir = _normalizeVector(direction)
+    dir = _normalize_vector(direction)
 
     normal = Vector(
         x=dir.y,
@@ -1040,34 +1028,34 @@ def polygonSlideDistance(A, B, direction, ignoreNegative):
             B1 = Point(edgeB[i].x + Boffsetx, edgeB[i].y + Boffsety)
             B2 = Point(edgeB[i + 1].x + Boffsetx, edgeB[i + 1].y + Boffsety)
 
-            if (_almostEqual(A1.x, A2.x) and _almostEqual(A1.y, A2.y)) or (
-                    _almostEqual(B1.x, B2.x) and _almostEqual(B1.y, B2.y)):
+            if (_almost_equal(A1.x, A2.x) and _almost_equal(A1.y, A2.y)) or (
+                    _almost_equal(B1.x, B2.x) and _almost_equal(B1.y, B2.y)):
                 continue  # ignore extremely small lines
 
-            d = segmentDistance(A1, A2, B1, B2, dir)
+            d = segment_distance(A1, A2, B1, B2, dir)
 
             if d is not None and (distance is None or d < distance):
-                if not ignoreNegative or d > 0 or _almostEqual(d, 0):
+                if not ignoreNegative or d > 0 or _almost_equal(d, 0):
                     distance = d
     return distance
 
 
 # project each point of B onto A in the given direction, and return the
-def polygonProjectionDistance(A, B, direction):
+def polygon_projection_distance(A, B, direction):
     Boffsetx = B.offsetx or 0
     Boffsety = B.offsety or 0
 
     Aoffsetx = A.offsetx or 0
     Aoffsety = A.offsety or 0
 
-    A = A.slice(0)
-    B = B.slice(0)
+    A = A[:]
+    B = B[:]
 
     # close the loop for polygons
-    if A[0] != A[A.length - 1]:
+    if A[0] != A[-1]:
         A.append(A[0])
 
-    if B[0] != B[B.length - 1]:
+    if B[0] != B[-1]:
         B.append(B[0])
 
     edgeA = A
@@ -1076,25 +1064,23 @@ def polygonProjectionDistance(A, B, direction):
     distance = None
     p, d, s1, s2 = None, None, None, None
 
-    for i in range(0, len(edgeB)):
+    for i in range(0, len(edgeB)-1):
         # the shortest/most negative projection of B onto A
         minprojection = None
-        minp = None
-        for j in range(0, len(edgeA)):
+        for j in range(0, len(edgeA)-1):
             p = Point(edgeB[i].x + Boffsetx, edgeB[i].y + Boffsety)
-            s1 = Point(edgeA[j].x + Aoffsetx, edgeA[j].y + Aoffsety)
+            s1 = Point(edgeA[j].x + Aoffsetx, edgeB[i].y + Aoffsety)
             s2 = Point(edgeA[j + 1].x + Aoffsetx, edgeA[j + 1].y + Aoffsety)
 
             if abs((s2.y - s1.y) * direction.x - (s2.x - s1.x) * direction.y) < TOL:
                 continue
 
             # project point, ignore edge boundaries
-            d = pointDistance(p, s1, s2, direction)
+            d = point_distance(p, s1, s2, direction)
 
-            if (d is not None and (minprojection is None or d < minprojection)):
+            if d is not None and (minprojection is None or d < minprojection):
                 minprojection = d
-                minp = p
-        if (minprojection is not None and (distance is None or minprojection > distance)):
+        if minprojection is not None and (distance is None or minprojection > distance):
             distance = minprojection
 
     return distance
@@ -1102,40 +1088,40 @@ def polygonProjectionDistance(A, B, direction):
 
 # searches for an arrangement of A and B such that they do not overlap
 # if an NFP is given, only search for startpoints that have not already been traversed in the given NFP
-def searchStartPoint(A, B, inside, NFP):
+def search_start_point(A, B, inside, NFP=None):
     # clone arrays
-    A = A.slice(0)
-    B = B.slice(0)
+    A = Polygon(A[:])
+    B = Polygon(B[:])
 
     # close the loop for polygons
-    if A[0] != A[A.length - 1]:
+    if A[0] != A[-1]:
         A.append(A[0])
 
-    if B[0] != B[B.length - 1]:
+    if B[0] != B[-1]:
         B.append(B[0])
 
     # returns True if point already exists in the given nfp
     def inNfp(p, nfp):
-        if (not nfp or len(nfp) == 0):
+        if not nfp or len(nfp) == 0:
             return False
 
         for i in range(0, len(nfp)):
             for j in range(0, len(nfp[i])):
-                if _almostEqual(p.x, nfp[i][j].x) and _almostEqual(p.y, nfp[i][j].y):
+                if _almost_equal(p.x, nfp[i][j].x) and _almost_equal(p.y, nfp[i][j].y):
                     return True
 
         return False
 
-    for i in range(0, len(A)):
-        if not A[i].marked:
-            A[i].marked = True
+    for i, a in enumerate(A):
+        if not a.marked:
+            a.marked = True
             for j in range(0, len(B)):
-                B.offsetx = A[i].x - B[j].x
-                B.offsety = A[i].y - B[j].y
+                B.offsetx = a.x - B[j].x
+                B.offsety = a.y - B[j].y
 
                 Binside = None
-                for k in range(0, len(B)):
-                    inpoly = pointInPolygon(Point(B[k].x + B.offsetx, B[k].y + B.offsety), A)
+                for b in B:
+                    inpoly = point_in_polygon(Point(b.x + B.offsetx, b.y + B.offsety), A)
                     if inpoly is not None:
                         Binside = inpoly
                         break
@@ -1144,17 +1130,16 @@ def searchStartPoint(A, B, inside, NFP):
                     return None
 
                 startPoint = Point(B.offsetx, B.offsety)
-                if ((Binside and inside) or (not Binside and not inside)) and not intersect(A,
-                                                                                                 B) and not inNfp(
-                        startPoint, NFP):
+                if ((Binside and inside) or (not Binside and not inside)) \
+                        and not intersect(A, B) and not inNfp(startPoint, NFP):
                     return startPoint
 
                 # slide B along vector
-                vx = A[i + 1].x - A[i].x
-                vy = A[i + 1].y - A[i].y
+                vx = A[i + 1].x - a.x
+                vy = A[i + 1].y - a.y
 
-                d1 = polygonProjectionDistance(A, B, Point(x=vx, y=vy))
-                d2 = polygonProjectionDistance(B, A, Point(x=-vx, y=-vy))
+                d1 = polygon_projection_distance(A, B, Point(x=vx, y=vy))
+                d2 = polygon_projection_distance(B, A, Point(x=-vx, y=-vy))
 
                 d = None
 
@@ -1164,21 +1149,21 @@ def searchStartPoint(A, B, inside, NFP):
                     pass
                 elif d1 is None:
                     d = d2
-                elif (d2 is None):
+                elif d2 is None:
                     d = d1
                 else:
                     d = min(d1, d2)
 
                 # only slide until no longer negative
                 # todo: clean this up
-                if d is not None and not _almostEqual(d, 0) and d > 0:
+                if d is not None and not _almost_equal(d, 0) and d > 0:
                     pass
                 else:
                     continue
 
                 vd2 = vx * vx + vy * vy
 
-                if d * d < vd2 and not _almostEqual(d * d, vd2):
+                if d * d < vd2 and not _almost_equal(d * d, vd2):
                     vd = math.sqrt(vx * vx + vy * vy)
                     vx *= d / vd
                     vy *= d / vd
@@ -1187,35 +1172,35 @@ def searchStartPoint(A, B, inside, NFP):
                 B.offsety += vy
 
                 for k in range(0, len(B)):
-                    inpoly = pointInPolygon(Point(B[k].x + B.offsetx, B[k].y + B.offsety), A)
+                    inpoly = point_in_polygon(Point(B[k].x + B.offsetx, B[k].y + B.offsety), A)
                     if inpoly is not None:
                         Binside = inpoly
                         break
                 startPoint = Point(B.offsetx, B.offsety)
-                if ((Binside and inside) or (not Binside and not inside)) and not intersect(A, B) and not inNfp(
-                        startPoint, NFP):
+                if ((Binside and inside) or (not Binside and not inside)) \
+                        and not intersect(A, B) and not inNfp(startPoint, NFP):
                     return startPoint
 
     return None
 
 
-def isRectangle(poly, tolerance=None):
-    bb = getPolygonBounds(poly)
+def is_rectangle(poly, tolerance=None):
+    bb = get_polygon_bounds(poly)
     tolerance = tolerance or TOL
 
     for i in range(0, len(poly)):
-        if not _almostEqual(poly[i].x, bb.x, tolerance=tolerance) and not _almostEqual(poly[i].x, bb.x + bb.width,
-                                                                                       tolerance=tolerance):
+        if not _almost_equal(poly[i].x, bb.x, tolerance=tolerance) and not _almost_equal(poly[i].x, bb.x + bb.width,
+                                                                                         tolerance=tolerance):
             return False
-        if not _almostEqual(poly[i].y, bb.y, tolerance=tolerance) and not _almostEqual(poly[i].y, bb.y + bb.height,
-                                                                                       tolerance=tolerance):
+        if not _almost_equal(poly[i].y, bb.y, tolerance=tolerance) and not _almost_equal(poly[i].y, bb.y + bb.height,
+                                                                                         tolerance=tolerance):
             return False
 
     return True
 
 
 # returns an interior NFP for the special case where A is a rectangle
-def noFitPolygonRectangle(A, B):
+def no_fit_polygon_rectangle(A, B):
     minAx = A[0].x
     minAy = A[0].y
     maxAx = A[0].x
@@ -1261,7 +1246,7 @@ def noFitPolygonRectangle(A, B):
 # given a static polygon A and a movable polygon B, compute a no fit polygon by orbiting B about A
 # if the inside flag is set, B is orbited inside of A rather than outside
 # if the searchEdges flag is set, all edges of A are explored for NFPs - multiple
-def noFitPolygon(A, B, inside, searchEdges):
+def no_fit_polygon(A, B, inside, searchEdges):
     if not A or len(A) < 3 or not B or len(B) < 3:
         return None
 
@@ -1297,9 +1282,9 @@ def noFitPolygon(A, B, inside, searchEdges):
         )
     else:
         # no reliable heuristic for inside
-        startpoint = searchStartPoint(A, B, True)
+        startpoint = search_start_point(A, B, True)
 
-    NFPlist = []
+    NFPlist = Polygon()
 
     while startpoint is not None:
 
@@ -1328,12 +1313,12 @@ def noFitPolygon(A, B, inside, searchEdges):
                 nexti = 0 if (i == A.length - 1) else i + 1
                 for j in range(0, len(B)):
                     nextj = 0 if (j == B.length - 1) else j + 1
-                    if _almostEqual(A[i].x, B[j].x + B.offsetx) and _almostEqual(A[i].y, B[j].y + B.offsety):
+                    if _almost_equal(A[i].x, B[j].x + B.offsetx) and _almost_equal(A[i].y, B[j].y + B.offsety):
                         touching.append({type: 0, A: i, B: j})
-                    elif _onSegment(A[i], A[nexti], Point(x=B[j].x + B.offsetx, y=B[j].y + B.offsety)):
+                    elif _on_segment(A[i], A[nexti], Point(x=B[j].x + B.offsetx, y=B[j].y + B.offsety)):
                         touching.append({type: 1, A: nexti, B: j})
-                    elif _onSegment(Point(x=B[j].x + B.offsetx, y=B[j].y + B.offsety),
-                                    Point(x=B[nextj].x + B.offsetx, y=B[nextj].y + B.offsety), A[i]):
+                    elif _on_segment(Point(x=B[j].x + B.offsetx, y=B[j].y + B.offsety),
+                                     Point(x=B[nextj].x + B.offsetx, y=B[nextj].y + B.offsety), A[i]):
                         touching.append({type: 2, A: i, B: nextj})
 
             # generate translation vectors from touching vertices/edges
@@ -1428,7 +1413,8 @@ def noFitPolygon(A, B, inside, searchEdges):
                         end=prevB
                     ))
 
-            # todo: there should be a faster way to reject vectors that will cause immediate intersection. For now just check them all
+            # todo: there should be a faster way to reject vectors
+            #  that will cause immediate intersection. For now just check them all
 
             translate = None
             maxd = 0
@@ -1449,10 +1435,10 @@ def noFitPolygon(A, B, inside, searchEdges):
                     prevunit = Vector(x=prevvector.x / prevlength, y=prevvector.y / prevlength)
 
                     # we need to scale down to unit vectors to normalize vector length. Could also just do a tan here
-                    if (abs(unitv.y * prevunit.x - unitv.x * prevunit.y) < 0.0001):
+                    if abs(unitv.y * prevunit.x - unitv.x * prevunit.y) < 0.0001:
                         continue
 
-                d = polygonSlideDistance(A, B, vectors[i], True)
+                d = polygon_slide_distance(A, B, vectors[i], True)
                 vecd2 = vectors[i].x * vectors[i].x + vectors[i].y * vectors[i].y
 
                 if d is None or d * d > vecd2:
@@ -1463,7 +1449,7 @@ def noFitPolygon(A, B, inside, searchEdges):
                     maxd = d
                     translate = vectors[i]
 
-            if translate is None or _almostEqual(maxd, 0):
+            if translate is None or _almost_equal(maxd, 0):
                 # didn't close the loop, something went wrong here
                 NFP = None
                 break
@@ -1475,7 +1461,7 @@ def noFitPolygon(A, B, inside, searchEdges):
 
             # trim
             vlength2 = translate.x * translate.x + translate.y * translate.y
-            if maxd * maxd < vlength2 and not _almostEqual(maxd * maxd, vlength2):
+            if maxd * maxd < vlength2 and not _almost_equal(maxd * maxd, vlength2):
                 scale = math.sqrt((maxd * maxd) / vlength2)
                 translate.x *= scale
                 translate.y *= scale
@@ -1483,7 +1469,7 @@ def noFitPolygon(A, B, inside, searchEdges):
             referencex += translate.x
             referencey += translate.y
 
-            if _almostEqual(referencex, startx) and _almostEqual(referencey, starty):
+            if _almost_equal(referencex, startx) and _almost_equal(referencey, starty):
                 # we've made a full loop
                 break
 
@@ -1491,7 +1477,7 @@ def noFitPolygon(A, B, inside, searchEdges):
             looped = False
             if len(NFP) > 0:
                 for i in range(0, len(NFP)):
-                    if _almostEqual(referencex, NFP[i].x) and _almostEqual(referencey, NFP[i].y):
+                    if _almost_equal(referencex, NFP[i].x) and _almost_equal(referencey, NFP[i].y):
                         looped = True
 
             if looped:
@@ -1515,14 +1501,15 @@ def noFitPolygon(A, B, inside, searchEdges):
             # only get outer NFP or first inner NFP
             break
 
-        startpoint = searchStartPoint(A, B, inside, NFPlist)
+        startpoint = search_start_point(A, B, inside, NFPlist)
 
     return NFPlist
 
 
-# given two polygons that touch at at least one point, but do not intersect. Return the outer perimeter of both polygons as a single continuous polygon
+# given two polygons that touch at at least one point, but do not intersect.
+# Return the outer perimeter of both polygons as a single continuous polygon
 # A and B must have the same winding direction
-def polygonHull(A, B):
+def polygon_hull(A, B):
     if not A or len(A) < 3 or not B or len(B) < 3:
         return None
 
@@ -1575,23 +1562,23 @@ def polygonHull(A, B):
         touching = False
         for j in range(0, len(B)):
             nextj = 0 if (j == B.length - 1) else j + 1
-            if _almostEqual(A[current].x + Aoffsetx, B[j].x + Boffsetx) and _almostEqual(A[current].y + Aoffsety,
+            if _almost_equal(A[current].x + Aoffsetx, B[j].x + Boffsetx) and _almost_equal(A[current].y + Aoffsety,
                                                                                          B[j].y + Boffsety):
                 C.append(Point(x=A[current].x + Aoffsetx, y=A[current].y + Aoffsety))
                 intercept1 = j
                 touching = True
                 break
-            elif _onSegment(Point(x=A[current].x + Aoffsetx, y=A[current].y + Aoffsety),
-                            Point(x=A[next].x + Aoffsetx, y=A[next].y + Aoffsety),
-                            Point(x=B[j].x + Boffsetx, y=B[j].y + Boffsety)):
+            elif _on_segment(Point(x=A[current].x + Aoffsetx, y=A[current].y + Aoffsety),
+                             Point(x=A[next].x + Aoffsetx, y=A[next].y + Aoffsety),
+                             Point(x=B[j].x + Boffsetx, y=B[j].y + Boffsety)):
                 C.append(Point(x=A[current].x + Aoffsetx, y=A[current].y + Aoffsety))
                 C.append(Point(x=B[j].x + Boffsetx, y=B[j].y + Boffsety))
                 intercept1 = j
                 touching = True
                 break
-            elif _onSegment(Point(x=B[j].x + Boffsetx, y=B[j].y + Boffsety),
-                            Point(x=B[nextj].x + Boffsetx, y=B[nextj].y + Boffsety),
-                            Point(x=A[current].x + Aoffsetx, y=A[current].y + Aoffsety)):
+            elif _on_segment(Point(x=B[j].x + Boffsetx, y=B[j].y + Boffsety),
+                             Point(x=B[nextj].x + Boffsetx, y=B[nextj].y + Boffsety),
+                             Point(x=A[current].x + Aoffsetx, y=A[current].y + Aoffsety)):
                 C.append(Point(x=A[current].x + Aoffsetx, y=A[current].y + Aoffsety))
                 C.append(Point(x=B[nextj].x + Boffsetx, y=B[nextj].y + Boffsety))
                 intercept1 = nextj
@@ -1613,23 +1600,23 @@ def polygonHull(A, B):
         touching = False
         for j in range(0, len(B)):
             nextj = 0 if (j == B.length - 1) else j + 1
-            if _almostEqual(A[current].x + Aoffsetx, B[j].x + Boffsetx) and _almostEqual(A[current].y,
+            if _almost_equal(A[current].x + Aoffsetx, B[j].x + Boffsetx) and _almost_equal(A[current].y,
                                                                                          B[j].y + Boffsety):
                 C.insert(0, Point(x=A[current].x + Aoffsetx, y=A[current].y + Aoffsety))
                 intercept2 = j
                 touching = True
                 break
-            elif _onSegment(Point(x=A[current].x + Aoffsetx, y=A[current].y + Aoffsety),
-                            Point(x=A[next].x + Aoffsetx, y=A[next].y + Aoffsety),
-                            Point(x=B[j].x + Boffsetx, y=B[j].y + Boffsety)):
+            elif _on_segment(Point(x=A[current].x + Aoffsetx, y=A[current].y + Aoffsety),
+                             Point(x=A[next].x + Aoffsetx, y=A[next].y + Aoffsety),
+                             Point(x=B[j].x + Boffsetx, y=B[j].y + Boffsety)):
                 C.insert(0, Point(x=A[current].x + Aoffsetx, y=A[current].y + Aoffsety))
                 C.insert(0, Point(x=B[j].x + Boffsetx, y=B[j].y + Boffsety))
                 intercept2 = j
                 touching = True
                 break
-            elif _onSegment(Point(x=B[j].x + Boffsetx, y=B[j].y + Boffsety),
-                            Point(x=B[nextj].x + Boffsetx, y=B[nextj].y + Boffsety),
-                            Point(x=A[current].x + Aoffsetx, y=A[current].y + Aoffsety)):
+            elif _on_segment(Point(x=B[j].x + Boffsetx, y=B[j].y + Boffsety),
+                             Point(x=B[nextj].x + Boffsetx, y=B[nextj].y + Boffsety),
+                             Point(x=A[current].x + Aoffsetx, y=A[current].y + Aoffsety)):
                 C.insert(0, Point(x=A[current].x + Aoffsetx, y=A[current].y + Aoffsety))
                 intercept2 = j
                 touching = True
@@ -1649,7 +1636,7 @@ def polygonHull(A, B):
     # the relevant points on B now lie between intercept1 and intercept2
     current = intercept1 + 1
     for i in range(0, len(B)):
-        current = 0 if (current == B.length) else current
+        current = 0 if (current == len(B)) else current
         C.append(Point(x=B[current].x + Boffsetx, y=B[current].y + Boffsety))
 
         if current == intercept2:
@@ -1659,15 +1646,15 @@ def polygonHull(A, B):
 
     # dedupe
     for i in range(0, len(C)):
-        next = 0 if (i == C.length - 1) else i + 1
-        if _almostEqual(C[i].x, C[next].x) and _almostEqual(C[i].y, C[next].y):
-            C.splice(i, 1)
+        next = 0 if (i == len(C) - 1) else i + 1
+        if _almost_equal(C[i].x, C[next].x) and _almost_equal(C[i].y, C[next].y):
+            splice(C, i, 1)
             i -= 1
 
     return C
 
 
-def rotatePolygon( polygon, angle):
+def rotate_polygon(polygon, angle):
     rotated = Polygon()
     angle = angle * math.pi / 180
     for point in polygon:
@@ -1676,9 +1663,9 @@ def rotatePolygon( polygon, angle):
         x1 = x * math.cos(angle) - y * math.sin(angle)
         y1 = x * math.sin(angle) + y * math.cos(angle)
 
-        rotated.append(Point(x= x1, y= y1))
+        rotated.append(Point(x=x1, y=y1))
     # reset bounding box
-    bounds = getPolygonBounds(rotated)
+    bounds = get_polygon_bounds(rotated)
     rotated.x = bounds.x
     rotated.y = bounds.y
     rotated.width = bounds.width

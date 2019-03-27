@@ -1,16 +1,30 @@
-from svgnest.js.svgnest import SvgNest
+import os
 
-svgString = open('drawing.svg', 'r').read()
+from svgnest.js.svgnest import SvgNest
+from svgnest.js.svgparser import childElements
+
+svgString = open('demo.svg', 'r').read()
 
 nest = SvgNest()
 svg = nest.parsesvg(svgString)
 t = nest.tree
-nest.setbin(svg.childNodes[15])
 
-def progress(*args, **lwargs):
-    pass
+# nest.setbin(svg.childNodes[15])   #drawing.svg
 
-def display(*args, **lwargs):
-    pass
+elements = childElements(svg)
+widths = [el.getAttribute("width") for el in elements]
+nest.setbin(elements[142])   # demo.svg
+
+
+def progress(progress):
+    print('progress: %s', progress)
+
+
+def display(placement=None, area_ratio=0, parts_ratio=0):
+    if placement:
+        print('placement={0}\narea_ratio={1}\nparts_ratio={2}'.format(placement, area_ratio, parts_ratio))
+        with open(os.path.join('working.svg'), 'w+') as svg_file:
+            placement.writexml(svg_file)
+
 
 nest.start(progress, display)

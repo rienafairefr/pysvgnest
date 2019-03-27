@@ -12,10 +12,15 @@ class Point(object):
     def __init__(self, x=None, y=None):
         self.x = x
         self.y = y
+        self.marked = None
+
+    def __repr__(self):
+        return 'Point<%s,%s>' % (self.x, self.y)
 
     def almostEqual(self, other):
         from svgnest.js.geometryutil import GeometryUtil
         return GeometryUtil.almostEqual(self.x, other.x) and GeometryUtil.almostEqual(self.y, other.y)
+
 
 class Arc:
     def __init__(self, center=None, rx=None, ry=None, theta=None, extent=None, angle=None):
@@ -36,7 +41,6 @@ class PolygonBound:
 
 
 class Vector(object):
-
     def __init__(self, x=None, y=None, start=None, end=None):
         self.x = x
         self.y = y
@@ -45,10 +49,10 @@ class Vector(object):
 
 
 class Polygon(list):
-    def __init__(self, l=None, source=None):
-        if l is None:
-            l = []
-        super().__init__(l)
+    def __init__(self, input_list=None, source=None):
+        if input_list is None:
+            input_list = []
+        super().__init__(input_list)
         self.source = source
         self.offsetx = None
         self.offsety = None

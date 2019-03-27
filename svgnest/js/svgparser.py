@@ -717,11 +717,8 @@ class SvgParser:
         i = 0
 
         if element.tagName == 'polygon' or element.tagName == 'polyline':
-            for i in range(0, len(element.points)):
-                poly.append(Point(
-                    x=element.points[i].x,
-                    y=element.points[i].y
-                ))
+            poly.extend([Point(*(float(n) for n in el.split(','))) for el in element.getAttribute('points').split()])
+
         if element.tagName == 'rect':
             p1 = Point()
             p2 = Point()
@@ -853,19 +850,19 @@ class SvgParser:
                         x1 = prevx
                         y1 = prevy
                 elif command == 'c' or command == 'C':
-                    pointlist = CubicBezier.linearize({x: prevx, y: prevy}, Point(x=x, y=y), Point(x=x1, y=y1),
-                                                      {x: x2, y: y2}, self.conf.tolerance)
-                    pointlist.shift()  # firstpoint would already be in the poly
-                    for j in range(0, len(pointlist)):
-                        point = Point(pointlist[j].x, pointlist[j].y)
+                    pointlist = CubicBezier.linearize(Point(x=prevx, y=prevy), Point(x=x, y=y), Point(x=x1, y=y1),
+                                                      Point(x=x2, y=y2), self.conf.tolerance)
+                    pointlist.pop(0)  # firstpoint would already be in the poly
+                    for list_point in pointlist:
+                        point = Point(list_point.x, list_point.y)
                         poly.append(point)
                 elif command == 'a' or command == 'A':
                     pointlist = Arc.linearize(Point(x=prevx, y=prevy), Point(x=x, y=y), s.r1, s.r2, s.angle,
                                               s.largeArcFlag, s.sweepFlag, self.conf.tolerance)
-                    pointlist.shift()
+                    pointlist.pop(0)
 
-                    for j in range(0, len(pointlist)):
-                        point = Point(pointlist[j].x, pointlist[j].y)
+                    for list_point in pointlist:
+                        point = Point(list_point.x, list_point.y)
                         poly.append(point)
                 elif command == 'z' or command == 'Z':
                     x = x0;

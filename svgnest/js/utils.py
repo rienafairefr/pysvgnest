@@ -1,3 +1,7 @@
+import logging
+from collections import namedtuple
+
+
 def splice(target, start, delete_count=None, *items):
     """Remove existing elements and/or add new elements to a list.
 
@@ -20,8 +24,29 @@ def splice(target, start, delete_count=None, *items):
 
 
 def parseInt(value):
-    return int(value)
+    try:
+        return int(value)
+    except ValueError:
+        return None
 
 
 def parseFloat(f):
-    return float(f)
+    try:
+        return float(f)
+    except ValueError:
+        return None
+
+
+Nfp = namedtuple('Nfp', ['key', 'value'])
+NfpPair = namedtuple('NfpPair', ['A', 'B', 'key'])
+NfpKey = namedtuple('NfpKey', ['A', 'B', 'inside', 'Arotation', 'Brotation'])
+DEBUG = True
+
+
+logger = logging.getLogger('pysvgnest')
+logger.setLevel(logging.INFO)
+logging.basicConfig()
+
+
+def log(msg, level=logging.DEBUG):
+    logger.log(level, msg)
