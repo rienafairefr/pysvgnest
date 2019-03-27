@@ -1,7 +1,7 @@
 import pytest
 
 from svgnest.js.geometry import Point, Polygon, Vector
-from svgnest.js.geometryutil import rotate_polygon, normalize_vector, point_in_polygon, polygon_area
+from svgnest.js.geometryutil import rotate_polygon, normalize_vector, point_in_polygon, polygon_area, intersect
 
 
 @pytest.mark.parametrize(
@@ -40,6 +40,11 @@ def test_point_in_polygon(point, polygon, expected):
     assert pip == expected
 
 
-def test_polygon_ara():
+def test_polygon_area():
     assert polygon_area(SQUARE2x2) == -4
     assert polygon_area(RECT4x2) == 8
+
+
+def test_intersect():
+    assert intersect(SQUARE2x2, RECT4x2)
+    assert intersect(SQUARE2x2, SQUARE2x2)

@@ -4,12 +4,11 @@ Copyright 2015 Jack Qiao
 Licensed under the MIT license
 """
 # noinspection PyPep8Naming
-import itertools
 import math
 
 from svgnest.js.geometry import Segment, Point, Arc, PolygonBound, Vector, Polygon
 from svgnest.js.geometrybase import TOL, almost_equal, within_distance, degrees_to_radians, radians_to_degrees, \
-    on_segment, line_intersect
+    on_segment
 from svgnest.js.utils import splice, log
 
 
@@ -415,10 +414,8 @@ def polygon_area(polygon):
 
     return 0.5 * area
 
-    # todo: swap this for a more efficient sweep-line implementation
-    # returnEdges: if set, return all edges on A that have intersections
 
-
+# todo: swap this for a more efficient sweep-line implementation
 def intersect(A, B):
     Aoffsetx = A.offsetx or 0
     Aoffsety = A.offsety or 0
@@ -426,8 +423,9 @@ def intersect(A, B):
     Boffsetx = B.offsetx or 0
     Boffsety = B.offsety or 0
 
-    A = A[:]
-    B = B[:]
+    A = A.clone()
+    B = B.clone()
+    print('intersect')
 
     for i in range(0, len(A) - 1):
         for j in range(0, len(B) - 1):
@@ -435,6 +433,8 @@ def intersect(A, B):
             a2 = Point(A[i + 1].x + Aoffsetx, A[i + 1].y + Aoffsety)
             b1 = Point(B[j].x + Boffsetx, B[j].y + Boffsety)
             b2 = Point(B[j + 1].x + Boffsetx, B[j + 1].y + Boffsety)
+
+            print((a1, a2, b1, b2))
 
             prevbindex = len(B) - 1 if j == 0 else j - 1
             prevaindex = len(A) - 1 if i == 0 else i - 1
@@ -444,20 +444,20 @@ def intersect(A, B):
             # go even further back if we happen to hit on a loop end point
             if B[prevbindex] == B[j] or (
                     almost_equal(B[prevbindex].x, B[j].x) and almost_equal(B[prevbindex].y, B[j].y)):
-                prevbindex = B.length - 1 if (prevbindex == 0) else prevbindex - 1
+                prevbindex = len(B) - 1 if (prevbindex == 0) else prevbindex - 1
 
             if A[prevaindex] == A[i] or (
                     almost_equal(A[prevaindex].x, A[i].x) and almost_equal(A[prevaindex].y, A[i].y)):
-                prevaindex = A.length - 1 if (prevaindex == 0) else prevaindex - 1
+                prevaindex = len(A) - 1 if (prevaindex == 0) else prevaindex - 1
 
             # go even further forward if we happen to hit on a loop end point
             if B[nextbindex] == B[j + 1] or (
                     almost_equal(B[nextbindex].x, B[j + 1].x) and almost_equal(B[nextbindex].y, B[j + 1].y)):
-                nextbindex = 0 if (nextbindex == B.length - 1) else nextbindex + 1
+                nextbindex = 0 if (nextbindex == len(B) - 1) else nextbindex + 1
 
             if A[nextaindex] == A[i + 1] or (
                     almost_equal(A[nextaindex].x, A[i + 1].x) and almost_equal(A[nextaindex].y, A[i + 1].y)):
-                nextaindex = 0 if (nextaindex == A.length - 1) else nextaindex + 1
+                nextaindex = 0 if (nextaindex == len(A) - 1) else nextaindex + 1
 
             a0 = Point(A[prevaindex].x + Aoffsetx, A[prevaindex].y + Aoffsety)
             b0 = Point(B[prevbindex].x + Boffsetx, B[prevbindex].y + Boffsety)
@@ -479,7 +479,7 @@ def intersect(A, B):
                 b1in = point_in_polygon(b1, A)
                 b3in = point_in_polygon(b3, A)
 
-                if (b1in  and not b3in ) or (not b1in and b3in):
+                if (b1in and not b3in) or (not b1in and b3in):
                     return True
                 else:
                     continue
@@ -499,7 +499,7 @@ def intersect(A, B):
                 a1in = point_in_polygon(a1, B)
                 a3in = point_in_polygon(a3, B)
 
-                if (a1in and not a3in ) or (not a1in and a3in):
+                if (a1in and not a3in) or (not a1in and a3in):
                     return True
                 else:
                     continue
@@ -569,7 +569,7 @@ def polygon_edge(polygon, normal):
 
     if indexleft < 0:
         indexleft = len(polygon) - 1
-    if indexright >= polygon.length:
+    if indexright >= len(polygon):
         indexright = 0
 
     minvertex = polygon[indexmin]
@@ -807,9 +807,9 @@ def segment_distance(A, B, E, F, direction):
 
     # coincident points
     if almost_equal(dotA, dotE):
-        distances.push(crossA - crossE)
+        distances.append(crossA - crossE)
     elif almost_equal(dotA, dotF):
-        distances.push(crossA - crossF)
+        distances.append(crossA - crossF)
     elif EFmin < dotA < EFmax:
         d = point_distance(A, E, F, reverse)
         # A currently touches EF, but AB is moving away from EF
@@ -923,8 +923,8 @@ def polygon_projection_distance(A, B, direction):
     Aoffsetx = A.offsetx or 0
     Aoffsety = A.offsety or 0
 
-    A = A[:]
-    B = B[:]
+    A = A.clone()
+    B = B.clone()
 
     # close the loop for polygons
     if A[0] != A[-1]:
@@ -965,8 +965,8 @@ def polygon_projection_distance(A, B, direction):
 # if an NFP is given, only search for startpoints that have not already been traversed in the given NFP
 def search_start_point(A, B, inside, NFP=None):
     # clone arrays
-    A = Polygon(A[:])
-    B = Polygon(B[:])
+    A = A.clone()
+    B = B.clone()
 
     # close the loop for polygons
     if A[0] != A[-1]:
@@ -1563,3 +1563,41 @@ def normalize_vector(v):
     inverse = 1 / len
 
     return Vector(x=v.x * inverse, y=v.y * inverse)
+
+
+def line_intersect(A, B, E, F, infinite=None):
+    a1 = B.y - A.y
+    b1 = A.x - B.x
+    c1 = B.x * A.y - A.x * B.y
+    a2 = F.y - E.y
+    b2 = E.x - F.x
+    c2 = F.x * E.y - E.x * F.y
+
+    denom = a1 * b2 - a2 * b1
+
+    x = (b1 * c2 - b2 * c1) / denom
+    y = (a2 * c1 - a1 * c2) / denom
+
+    if not math.isfinite(x) or not math.isfinite(y):
+        return None
+
+    # lines are colinear
+    # var crossABE = (E.y - A.y) * (B.x - A.x) - (E.x - A.x) * (B.y - A.y)
+    # var crossABF = (F.y - A.y) * (B.x - A.x) - (F.x - A.x) * (B.y - A.y)
+    # if(_almostEqual(crossABE,0) and _almostEqual(crossABF,0)){
+    # 	return None
+    # }*/
+
+    if not infinite:
+        # coincident points do not count as intersecting
+        if abs(A.x - B.x) > TOL and ((x < A.x or x > B.x) if (A.x < B.x) else (x > A.x or x < B.x)):
+            return None
+        if abs(A.y - B.y) > TOL and ((y < A.y or y > B.y) if (A.y < B.y) else (y > A.y or y < B.y)):
+            return None
+
+        if abs(E.x - F.x) > TOL and ((x < E.x or x > F.x) if (E.x < F.x) else (x > E.x or x < F.x)):
+            return None
+        if abs(E.y - F.y) > TOL and ((y < E.y or y > F.y) if (E.y < F.y) else (y > E.y or y < F.y)):
+            return None
+
+    return Point(x=x, y=y)

@@ -72,3 +72,6 @@ class Polygon(list):
             if not self[i].almost_equal(op):
                 return False
         return True
+
+    def clone(self):
+        return Polygon(*self[:], source=self.source)
