@@ -1,7 +1,7 @@
 import math
 
 from svgnest.js.geometry import Point, Polygon
-from svgnest.js.geometryutil import rotate_polygon, GeometryUtil, polygon_area, get_polygon_bounds
+from svgnest.js.geometryutil import rotate_polygon, polygon_area, get_polygon_bounds
 from svgnest.js.utils import splice, NfpKey
 from pyclipper import *
 
@@ -253,7 +253,7 @@ class PlacementWorker:
                         # weigh width more, to help compress in direction of gravity
                         area = rectbounds.width*2 + rectbounds.height
 
-                        if minarea is None or area < minarea or (GeometryUtil.almostEqual(minarea, area) and (minx is None or shiftvector.x < minx)):
+                        if minarea is None or area < minarea or (almost_equal(minarea, area) and (minx is None or shiftvector.x < minx)):
                             minarea = area
                             minwidth = rectbounds.width
                             position = shiftvector

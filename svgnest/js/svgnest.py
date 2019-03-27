@@ -10,10 +10,11 @@ from pyclipper import scale_to_clipper, SimplifyPolygon, PFT_NONZERO, Area, Clea
 from random import random, shuffle
 
 from svgnest.js.geometry import Point, Polygon
-from svgnest.js.geometryutil import GeometryUtil, polygon_area, point_in_polygon, get_polygon_bounds, rotate_polygon, \
+from svgnest.js.geometrybase import almost_equal
+from svgnest.js.geometryutil import polygon_area, point_in_polygon, get_polygon_bounds, rotate_polygon, \
     no_fit_polygon_rectangle, no_fit_polygon, is_rectangle
 from svgnest.js.placementworker import PlacementWorker
-from svgnest.js.svgparser import SvgParser, childElements
+from svgnest.js.svgparser import SvgParser, child_elements
 from svgnest.js.utils import splice, parseInt, parseFloat, Nfp, NfpPair, NfpKey, log
 
 
@@ -79,8 +80,6 @@ def minkowski_difference(A, B):
 
 def generate_nfp(argtuple):
     pair, searchEdges, useHoles = argtuple
-
-
 
     if not pair:
         return None
@@ -206,7 +205,7 @@ class SvgNest:
 
         self.svg = self.parser.clean()
 
-        self.tree = self.getParts(childElements(self.svg))
+        self.tree = self.getParts(child_elements(self.svg))
 
         # re-order elements such that deeper elements are on top, so they can be moused over
         def zorder(paths):
@@ -229,7 +228,7 @@ class SvgNest:
         if not c:
             return self.config
 
-        if c.curveTolerance and not GeometryUtil.almostEqual(parseFloat(c.curveTolerance), 0):
+        if c.curveTolerance and not almost_equal(parseFloat(c.curveTolerance), 0):
             self.config.curveTolerance = parseFloat(c.curveTolerance)
 
         if 'spacing' in c:
@@ -265,7 +264,7 @@ class SvgNest:
         if not self.svg or not self.bin:
             return False
 
-        self.parts = childElements(self.svg)
+        self.parts = child_elements(self.svg)
         parts = self.parts
         binindex = self.parts.index(self.bin)
 
@@ -340,7 +339,7 @@ class SvgNest:
         for i in range(0, len(tree)):
             start = tree[i][0]
             end = tree[i][-1]
-            if start == end or start.almostEqual(end):
+            if start == end or start.almost_equal(end):
                 tree[i].pop()
 
             if polygon_area(tree[i]) > 0:
@@ -572,7 +571,7 @@ class SvgNest:
     # Positive offset expands the polygon, negative contracts
     # note that this returns an array of polygons
     def polygonOffset(self, polygon, offset):
-        if not offset or offset == 0 or GeometryUtil.almostEqual(offset, 0):
+        if not offset or offset == 0 or almost_equal(offset, 0):
             return polygon
 
         p = self.svgToClipper(polygon)

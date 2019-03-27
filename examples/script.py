@@ -1,7 +1,7 @@
 import os
 
 from svgnest.js.svgnest import SvgNest
-from svgnest.js.svgparser import childElements
+from svgnest.js.svgparser import child_elements
 
 svgString = open('demo.svg', 'r').read()
 
@@ -11,7 +11,7 @@ t = nest.tree
 
 # nest.setbin(svg.childNodes[15])   #drawing.svg
 
-elements = childElements(svg)
+elements = child_elements(svg)
 widths = [el.getAttribute("width") for el in elements]
 nest.setbin(elements[142])   # demo.svg
 

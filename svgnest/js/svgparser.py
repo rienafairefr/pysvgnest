@@ -6,9 +6,13 @@ from svg.path import parse_path
 from svgpathtools.parser import _tokenize_path, COMMANDS, UPPERCASE
 
 from svgnest.js.domparser import DOMParser
-from svgnest.js.geometry import Point, Arc, Polygon
-from svgnest.js.geometryutil import GeometryUtil, CubicBezier, QuadraticBezier
+from svgnest.js.geometry import Point, Polygon
+from svgnest.js.geometryutil import CubicBezier, QuadraticBezier, ArcSegment
+from svgnest.js.geometrybase import almost_equal
 from svgnest.js.matrix import Matrix
+from svgnest.js.svgpathseg import SVGPathSegClosePath, SVGPathSegMoveto, SVGPathSegLineto, SVGPathSegLinetoHorizontal, \
+    SVGPathSegLinetoVertical, SVGPathSegCurvetoCubic, SVGPathSegCurvetoCubicSmooth, SVGPathSegCurvetoQuadratic, \
+    SVGPathSegCurvetoQuadraticSmooth, SVGPathSegArc
 from svgnest.js.utils import parseFloat
 
 
@@ -17,170 +21,12 @@ class Config:
     toleranceSvg = 0.005  # fudge factor for browser inaccuracy in SVG unit handling
 
 
-def childElements(element):
+def child_elements(element):
     ret = []
     for child in element.childNodes:
         if child.nodeType == Node.ELEMENT_NODE:
             ret.append(child)
     return ret
-
-
-class SVGPathSegList:
-    def getItem(self, idx):
-        pass
-
-class SVGPathSeg:
-
-    PATHSEG_UNKNOWN = 0
-    PATHSEG_CLOSEPATH = 1
-    PATHSEG_MOVETO_ABS = 2
-    PATHSEG_MOVETO_REL = 3
-    PATHSEG_LINETO_ABS = 4
-    PATHSEG_LINETO_REL = 5
-    PATHSEG_CURVETO_CUBIC_ABS = 6
-    PATHSEG_CURVETO_CUBIC_REL = 7
-    PATHSEG_CURVETO_QUADRATIC_ABS = 8
-    PATHSEG_CURVETO_QUADRATIC_REL = 9
-    PATHSEG_ARC_ABS = 10
-    PATHSEG_ARC_REL = 11
-    PATHSEG_LINETO_HORIZONTAL_ABS = 12
-    PATHSEG_LINETO_HORIZONTAL_REL = 13
-    PATHSEG_LINETO_VERTICAL_ABS = 14
-    PATHSEG_LINETO_VERTICAL_REL = 15
-    PATHSEG_CURVETO_CUBIC_SMOOTH_ABS = 16
-    PATHSEG_CURVETO_CUBIC_SMOOTH_REL = 17
-    PATHSEG_CURVETO_QUADRATIC_SMOOTH_ABS = 18
-    PATHSEG_CURVETO_QUADRATIC_SMOOTH_REL = 19
-
-    letters = [
-        '', 'Z',
-        'M', 'm',
-        'L', 'l',
-        'C', 'c',
-        'Q', 'q',
-        'A', 'a',
-        'H', 'h',
-        'V', 'v',
-        'S', 's',
-        'T', 't'
-    ]
-
-    def __init__(self, pathSegType):
-        self.pathSegType = pathSegType
-
-    @property
-    def pathSegTypeAsLetter(self):
-        return self.letters[self.pathSegType]
-
-    def __contains__(self, item):
-        return hasattr(self, item)
-
-
-class SVGPathSegClosePath(SVGPathSeg):
-    def __init__(self):
-        super().__init__(SVGPathSeg.PATHSEG_CLOSEPATH)
-
-
-class SVGPathSegMoveto(SVGPathSeg):
-    def __init__(self, x, y, abs):
-        if abs:
-            super().__init__(SVGPathSeg.PATHSEG_MOVETO_ABS)
-        else:
-            super().__init__(SVGPathSeg.PATHSEG_MOVETO_REL)
-        self.x = x
-        self.y = y
-
-
-class SVGPathSegLineto(SVGPathSeg):
-    def __init__(self, x, y, abs):
-        if abs:
-            super().__init__(SVGPathSeg.PATHSEG_LINETO_ABS)
-        else:
-            super().__init__(SVGPathSeg.PATHSEG_LINETO_REL)
-        self.x = x
-        self.y = y
-
-
-class SVGPathSegLinetoHorizontal(SVGPathSeg):
-    def __init__(self, x, abs):
-        if abs:
-            super().__init__(SVGPathSeg.PATHSEG_LINETO_HORIZONTAL_ABS)
-        else:
-            super().__init__(SVGPathSeg.PATHSEG_LINETO_HORIZONTAL_REL)
-        self.x = x
-
-
-class SVGPathSegLinetoVertical(SVGPathSeg):
-    def __init__(self, y, abs):
-        if abs:
-            super().__init__(SVGPathSeg.PATHSEG_LINETO_VERTICAL_ABS)
-        else:
-            super().__init__(SVGPathSeg.PATHSEG_LINETO_VERTICAL_REL)
-        self.y = y
-
-
-class SVGPathSegCurvetoCubic(SVGPathSeg):
-    def __init__(self, x, y, x1, y1, x2, y2, abs):
-        if abs:
-            super().__init__(SVGPathSeg.PATHSEG_CURVETO_CUBIC_ABS)
-        else:
-            super().__init__(SVGPathSeg.PATHSEG_CURVETO_CUBIC_REL)
-        self.x = x
-        self.y = y
-        self.x1 = x1
-        self.y1 = y1
-        self.x2 = x2
-        self.y2 = y2
-
-
-class SVGPathSegCurvetoCubicSmooth(SVGPathSeg):
-    def __init__(self, x, y, x2, y2, abs):
-        if abs:
-            super().__init__(SVGPathSeg.PATHSEG_CURVETO_CUBIC_SMOOTH_ABS)
-        else:
-            super().__init__(SVGPathSeg.PATHSEG_CURVETO_CUBIC_SMOOTH_REL)
-        self.x = x
-        self.y = y
-        self.x2 = x2
-        self.y2 = y2
-
-
-class SVGPathSegCurvetoQuadratic(SVGPathSeg):
-    def __init__(self, x, y, x1, y1, abs):
-        if abs:
-            super().__init__(SVGPathSeg.PATHSEG_CURVETO_QUADRATIC_ABS)
-        else:
-            super().__init__(SVGPathSeg.PATHSEG_CURVETO_QUADRATIC_REL)
-        self.x = x
-        self.y = y
-        self.x1 = x1
-        self.y1 = y1
-
-
-class SVGPathSegCurvetoQuadraticSmooth(SVGPathSeg):
-    def __init__(self, x, y, abs):
-        if abs:
-            super().__init__(SVGPathSeg.PATHSEG_CURVETO_QUADRATIC_SMOOTH_ABS)
-        else:
-            super().__init__(SVGPathSeg.PATHSEG_CURVETO_QUADRATIC_SMOOTH_REL)
-        self.x = x
-        self.y = y
-
-
-class SVGPathSegArc(SVGPathSeg):
-
-    def __init__(self, x, y, r1, r2, angle, largeArcFlag, sweepFlag, abs):
-        if abs:
-            super().__init__(SVGPathSeg.PATHSEG_ARC_ABS)
-        else:
-            super().__init__(SVGPathSeg.PATHSEG_ARC_REL)
-        self.x = x
-        self.y = y
-        self.r1 = r1
-        self.r2 = r2
-        self.angle = angle
-        self.largeArcFlag = largeArcFlag
-        self.sweepFlag = sweepFlag
 
 
 def parse_path(pathdef):
@@ -385,7 +231,7 @@ class SvgParser:
                     seglist.replaceItem(
                         path.createSVGPathSegArcAbs(x, y, s.r1, s.r2, s.angle, s.largeArcFlag, s.sweepFlag), i)
                 elif command == 'z' or command == 'Z':
-                    x = x0; y = y0;
+                    x = x0; y = y0
             # Record the start of a subpath
             if command == 'M' or command == 'm':
                 x0, y0 = x, y
@@ -394,8 +240,9 @@ class SvgParser:
     # from https://github.com/fontello/svgpath
     def transformParse(this, transformString):
 
-        class Operations:
+        class Operations(list):
             def __init__(self):
+                super().__init__()
                 self.matrix = True
                 self.scale = True
                 self.rotate = True
@@ -493,7 +340,7 @@ class SvgParser:
         if element.tagName == 'g' or element.tagName == 'svg':
             if element.hasAttribute('transform'):
                 element.removeAttribute('transform')
-            for child in childElements(element):
+            for child in child_elements(element):
                 this.applyTransform(child, transformString)
         elif transform and not transform.isIdentity():
             if element.tagName == 'ellipse':
@@ -620,7 +467,7 @@ class SvgParser:
 
     # bring all child elements to the top level
     def flatten(this, element):
-        for child in childElements(element):
+        for child in child_elements(element):
             this.flatten(child)
 
         if element.tagName != 'svg':
@@ -635,7 +482,7 @@ class SvgParser:
 
         element = element or this.svgRoot
 
-        for child in childElements(element):
+        for child in child_elements(element):
             this.filter(whitelist, child)
 
         if len(element.childNodes) == 0 and element.tagName not in whitelist:
@@ -706,7 +553,7 @@ class SvgParser:
     # recursively run the given function on the given element
     def recurse(self, element, func):
         # only operate on original DOM tree, ignore any children that are added. Avoid infinite loops
-        for child in childElements(element):
+        for child in child_elements(element):
             self.recurse(child, func)
 
         func(element)
@@ -857,7 +704,7 @@ class SvgParser:
                         point = Point(list_point.x, list_point.y)
                         poly.append(point)
                 elif command == 'a' or command == 'A':
-                    pointlist = Arc.linearize(Point(x=prevx, y=prevy), Point(x=x, y=y), s.r1, s.r2, s.angle,
+                    pointlist = ArcSegment.linearize(Point(x=prevx, y=prevy), Point(x=x, y=y), s.r1, s.r2, s.angle,
                                               s.largeArcFlag, s.sweepFlag, self.conf.tolerance)
                     pointlist.pop(0)
 
@@ -865,8 +712,8 @@ class SvgParser:
                         point = Point(list_point.x, list_point.y)
                         poly.append(point)
                 elif command == 'z' or command == 'Z':
-                    x = x0;
-                    y = y0;
+                    x = x0
+                    y = y0
 
                 # Record the start of a subpath
                 if command == 'M' or command == 'm':
@@ -874,8 +721,8 @@ class SvgParser:
                     y0 = y
 
         # do not include last point if coincident with starting point
-        while len(poly) > 0 and GeometryUtil.almostEqual(poly[0].x, poly[-1].x,
-                                                         self.conf.toleranceSvg) and GeometryUtil.almostEqual(
+        while len(poly) > 0 and almost_equal(poly[0].x, poly[-1].x,
+                                             self.conf.toleranceSvg) and almost_equal(
                 poly[0].y, poly[-1].y, self.conf.toleranceSvg):
             poly.pop()
 

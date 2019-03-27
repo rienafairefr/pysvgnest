@@ -1,3 +1,4 @@
+from svgnest.js.geometrybase import almost_equal
 
 
 class Segment(object):
@@ -17,9 +18,8 @@ class Point(object):
     def __repr__(self):
         return 'Point<%s,%s>' % (self.x, self.y)
 
-    def almostEqual(self, other):
-        from svgnest.js.geometryutil import GeometryUtil
-        return GeometryUtil.almostEqual(self.x, other.x) and GeometryUtil.almostEqual(self.y, other.y)
+    def almost_equal(self, other):
+        return almost_equal(self.x, other.x) and almost_equal(self.y, other.y)
 
 
 class Arc:
@@ -47,12 +47,16 @@ class Vector(object):
         self.start = start
         self.end = end
 
+    def almost_equal(self, other):
+        return almost_equal(self.x, other.x) and \
+               almost_equal(self.y, other.y) and \
+               almost_equal(self.start, other.start) and \
+               almost_equal(self.end, other.end)
+
 
 class Polygon(list):
-    def __init__(self, input_list=None, source=None):
-        if input_list is None:
-            input_list = []
-        super().__init__(input_list)
+    def __init__(self, *input_list, source=None):
+        super().__init__(list(input_list))
         self.source = source
         self.offsetx = None
         self.offsety = None
@@ -60,3 +64,11 @@ class Polygon(list):
         self.element_id = None
         self.width = None
         self.height = None
+
+    def almost_equal(self, other):
+        if len(other) != len(self):
+            return False
+        for i, op in enumerate(other):
+            if not self[i].almost_equal(op):
+                return False
+        return True
