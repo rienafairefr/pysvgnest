@@ -405,12 +405,13 @@ def polygon_area(polygon):
     area = 0
     i = 0
     j = len(polygon) - 1
-    while True:
-        if i >= len(polygon):
-            break
+    # for (i=0, j=polygon.length-1; i<polygon.length; j=i++){
+    for i in range(len(polygon)):
+        if i == 0:
+            j = len(polygon) -1
+        else:
+            j = i - 1
         area += (polygon[j].x + polygon[i].x) * (polygon[j].y - polygon[i].y)
-        i += 1
-        j = i
 
     return 0.5 * area
 

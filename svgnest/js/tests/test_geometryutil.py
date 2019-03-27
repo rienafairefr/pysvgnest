@@ -1,7 +1,7 @@
 import pytest
 
 from svgnest.js.geometry import Point, Polygon, Vector
-from svgnest.js.geometryutil import rotate_polygon, normalize_vector, point_in_polygon
+from svgnest.js.geometryutil import rotate_polygon, normalize_vector, point_in_polygon, polygon_area
 
 
 @pytest.mark.parametrize(
@@ -26,6 +26,7 @@ def test_normalize_vector():
 
 
 SQUARE2x2 = Polygon(Point(0, 0), Point(2, 0), Point(2, 2), Point(0, 2), Point(0, 0))
+RECT4x2 = Polygon(Point(0, 0), Point(0, 2), Point(4, 2), Point(4, 0), Point(0, 0))
 
 @pytest.mark.parametrize(
     ['point', 'polygon', 'expected'],
@@ -37,3 +38,8 @@ SQUARE2x2 = Polygon(Point(0, 0), Point(2, 0), Point(2, 2), Point(0, 2), Point(0,
 def test_point_in_polygon(point, polygon, expected):
     pip = point_in_polygon(point, polygon)
     assert pip == expected
+
+
+def test_polygon_ara():
+    assert polygon_area(SQUARE2x2) == -4
+    assert polygon_area(RECT4x2) == 8
