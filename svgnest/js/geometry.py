@@ -75,3 +75,7 @@ class Polygon(list):
 
     def clone(self):
         return Polygon(*self[:], source=self.source)
+
+    @property
+    def length(self):
+        return len(self)
