@@ -21,6 +21,10 @@ class Point(object):
     def almost_equal(self, other):
         return almost_equal(self.x, other.x) and almost_equal(self.y, other.y)
 
+    @property
+    def xy(self):
+        return self.x, self.y
+
 
 class Arc:
     def __init__(self, center=None, rx=None, ry=None, theta=None, extent=None, angle=None):
@@ -79,3 +83,11 @@ class Polygon(list):
     @property
     def length(self):
         return len(self)
+
+    @property
+    def xy(self):
+        return [point.x for point in self], [point.y for point in self]
+
+    @property
+    def x_y(self):
+        return [(point.x, point.y) for point in self]

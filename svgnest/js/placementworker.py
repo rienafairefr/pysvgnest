@@ -1,5 +1,6 @@
 import math
 
+from svgnest.js.display import plot
 from svgnest.js.geometry import Point, Polygon
 from svgnest.js.geometryutil import rotate_polygon, polygon_area, get_polygon_bounds
 from svgnest.js.utils import splice, NfpKey
@@ -179,12 +180,12 @@ class PlacementWorker:
                         clone = scale_to_clipper(clone, self.config.clipperScale)
                         CleanPolygon(clone, 0.0001 * self.config.clipperScale)
                         area = abs(Area(clone))
-                        if len(clone) > 2:
+                        if len(clone) > 2 and area > 0.1*self.config.clipperScale*self.config.clipperScale:
                             clipper.AddPath(clone, PT_SUBJECT, True)
 
                 try:
                     combinedNfp = clipper.Execute(CT_UNION, PFT_NONZERO, PFT_NONZERO)
-                except ClipperException:
+                except ClipperException as e:
                     continue
 
                 # difference with bin polygon
@@ -194,7 +195,7 @@ class PlacementWorker:
                 clipper.AddPaths(clipperBinNfp, PT_SUBJECT, True)
                 try:
                     finalNfp = clipper.Execute(CT_DIFFERENCE, PFT_NONZERO, PFT_NONZERO)
-                except ClipperException:
+                except ClipperException as e:
                     continue
 
                 finalNfp = CleanPolygons(finalNfp, 0.0001 * self.config.clipperScale)

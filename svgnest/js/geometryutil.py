@@ -868,8 +868,8 @@ def polygon_slide_distance(A, B, direction, ignoreNegative):
     Boffsetx = B.offsetx or 0
     Boffsety = B.offsety or 0
 
-    A = A.slice(0)
-    B = B.slice(0)
+    A = A.clone()
+    B = B.clone()
 
     # close the loop for polygons
     if A[0] != A[A.length - 1]:
@@ -885,19 +885,8 @@ def polygon_slide_distance(A, B, direction, ignoreNegative):
 
     dir = normalize_vector(direction)
 
-    normal = Vector(
-        x=dir.y,
-        y=-dir.x
-    )
-
-    reverse = Vector(
-        x=-dir.x,
-        y=-dir.y,
-    )
-
-    for i in range(0, len(edgeB)):
-        mind = None
-        for j in range(0, len(edgeA) - 1):
+    for i in range(0, len(edgeB)-1):
+        for j in range(0, len(edgeA)-1):
             A1 = Point(edgeA[j].x + Aoffsetx, edgeA[j].y + Aoffsety)
             A2 = Point(edgeA[j + 1].x + Aoffsetx, edgeA[j + 1].y + Aoffsety)
             B1 = Point(edgeB[i].x + Boffsetx, edgeB[i].y + Boffsety)
@@ -937,7 +926,6 @@ def polygon_projection_distance(A, B, direction):
     edgeB = B
 
     distance = None
-    p, d, s1, s2 = None, None, None, None
 
     for i in range(0, len(edgeB)-1):
         # the shortest/most negative projection of B onto A
@@ -963,7 +951,7 @@ def polygon_projection_distance(A, B, direction):
 
 # searches for an arrangement of A and B such that they do not overlap
 # if an NFP is given, only search for startpoints that have not already been traversed in the given NFP
-def search_start_point(A, B, inside, NFP=None):
+def search_start_point(A, B, inside, nfp=None):
     # clone arrays
     A = A.clone()
     B = B.clone()
@@ -1006,7 +994,7 @@ def search_start_point(A, B, inside, NFP=None):
 
                 startPoint = Point(B.offsetx, B.offsety)
                 if ((Binside and inside) or (not Binside and not inside)) \
-                        and not intersect(A, B) and not inNfp(startPoint, NFP):
+                        and not intersect(A, B) and not inNfp(startPoint, nfp):
                     return startPoint
 
                 # slide B along vector
@@ -1053,7 +1041,7 @@ def search_start_point(A, B, inside, NFP=None):
                         break
                 startPoint = Point(B.offsetx, B.offsety)
                 if ((Binside and inside) or (not Binside and not inside)) \
-                        and not intersect(A, B) and not inNfp(startPoint, NFP):
+                        and not intersect(A, B) and not inNfp(startPoint, nfp):
                     return startPoint
 
     return None
@@ -1081,46 +1069,43 @@ def no_fit_polygon_rectangle(A, B):
     maxAx = A[0].x
     maxAy = A[0].y
 
-    for i in range(1, len(A)):
-        if A[i].x < minAx:
-            minAx = A[i].x
-        if A[i].y < minAy:
-            minAy = A[i].y
-        if A[i].x > maxAx:
-            maxAx = A[i].x
-        if A[i].y > maxAy:
-            maxAy = A[i].y
+    for point in A:
+        if point.x < minAx:
+            minAx = point.x
+        if point.y < minAy:
+            minAy = point.y
+        if point.x > maxAx:
+            maxAx = point.x
+        if point.y > maxAy:
+            maxAy = point.y
 
     minBx = B[0].x
     minBy = B[0].y
     maxBx = B[0].x
     maxBy = B[0].y
-    for i in range(1, len(B)):
-        if B[i].x < minBx:
-            minBx = B[i].x
-        if B[i].y < minBy:
-            minBy = B[i].y
-        if B[i].x > maxBx:
-            maxBx = B[i].x
-        if B[i].y > maxBy:
-            maxBy = B[i].y
+    for point in B:
+        if point.x < minBx:
+            minBx = point.x
+        if point.y < minBy:
+            minBy = point.y
+        if point.x > maxBx:
+            maxBx = point.x
+        if point.y > maxBy:
+            maxBy = point.y
 
     if maxBx - minBx > maxAx - minAx:
         return None
     if maxBy - minBy > maxAy - minAy:
         return None
 
-    return [[
+    return [Polygon(
         Point(minAx - minBx + B[0].x, minAy - minBy + B[0].y),
         Point(maxAx - maxBx + B[0].x, minAy - minBy + B[0].y),
         Point(maxAx - maxBx + B[0].x, maxAy - maxBy + B[0].y),
         Point(minAx - minBx + B[0].x, maxAy - maxBy + B[0].y)
-    ]]
+    )]
 
 
-# given a static polygon A and a movable polygon B, compute a no fit polygon by orbiting B about A
-# if the inside flag is set, B is orbited inside of A rather than outside
-# if the searchEdges flag is set, all edges of A are explored for NFPs - multiple
 class Touching:
     def __init__(self, type=None, A=None, B=None):
         self.type = type
@@ -1128,6 +1113,9 @@ class Touching:
         self.B = B
 
 
+# given a static polygon A and a movable polygon B, compute a no fit polygon by orbiting B about A
+# if the inside flag is set, B is orbited inside of A rather than outside
+# if the searchEdges flag is set, all edges of A are explored for NFPs - multiple
 def no_fit_polygon(A, B, inside, searchEdges):
     if not A or len(A) < 3 or not B or len(B) < 3:
         return None
@@ -1135,29 +1123,27 @@ def no_fit_polygon(A, B, inside, searchEdges):
     A.offsetx = 0
     A.offsety = 0
 
-    i = None
-    j = None
-
     minA = A[0].y
     minAindex = 0
 
     maxB = B[0].y
     maxBindex = 0
 
-    for i in range(1, len(A)):
-        A[i].marked = False
-        if A[i].y < minA:
-            minA = A[i].y
+    for i, a in enumerate(A):
+        a.marked = False
+        if a.y < minA:
+            minA = a.y
             minAindex = i
 
-    for i in range(1, len(B)):
-        B[i].marked = False
-        if B[i].y > maxB:
-            maxB = B[i].y
+    for i, b in enumerate(B):
+        b.marked = False
+        if b.y > maxB:
+            maxB = b.y
             maxBindex = i
 
     if not inside:
-        # shift B such that the bottom-most point of B is at the top-most point of A. This guarantees an initial placement with no intersections
+        # shift B such that the bottom-most point of B is at the top-most point of A.
+        # This guarantees an initial placement with no intersections
         startpoint = Point(
             A[minAindex].x - B[maxBindex].x,
             A[minAindex].y - B[maxBindex].y
@@ -1166,7 +1152,7 @@ def no_fit_polygon(A, B, inside, searchEdges):
         # no reliable heuristic for inside
         startpoint = search_start_point(A, B, True)
 
-    NFPlist = Polygon()
+    NFPlist = []
 
     while startpoint is not None:
 
@@ -1177,10 +1163,10 @@ def no_fit_polygon(A, B, inside, searchEdges):
         touching = []
 
         prevvector = None  # keep track of previous vector
-        NFP = [Point(
+        NFP = Polygon(Point(
             B[0].x + B.offsetx,
             B[0].y + B.offsety
-        )]
+        ))
 
         referencex = B[0].x + B.offsetx
         referencey = B[0].y + B.offsety
@@ -1192,10 +1178,11 @@ def no_fit_polygon(A, B, inside, searchEdges):
             touching = []
             # find touching vertices/edges
             for i in range(0, len(A)):
-                nexti = 0 if (i == A.length - 1) else i + 1
+                nexti = 0 if (i == len(A) - 1) else i + 1
                 for j in range(0, len(B)):
-                    nextj = 0 if (j == B.length - 1) else j + 1
-                    if almost_equal(A[i].x, B[j].x + B.offsetx) and almost_equal(A[i].y, B[j].y + B.offsety):
+                    nextj = 0 if (j == len(B) - 1) else j + 1
+                    if almost_equal(A[i].x, B[j].x + B.offsetx) and \
+                            almost_equal(A[i].y, B[j].y + B.offsety):
                         touching.append(Touching(type=0, A=i, B=j))
                     elif on_segment(A[i], A[nexti], Point(x=B[j].x + B.offsetx, y=B[j].y + B.offsety)):
                         touching.append(Touching(type=1, A=nexti, B=j))
@@ -1358,8 +1345,8 @@ def no_fit_polygon(A, B, inside, searchEdges):
             # if A and B start on a touching horizontal line, the end point may not be the start point
             looped = False
             if len(NFP) > 0:
-                for i in range(0, len(NFP)):
-                    if almost_equal(referencex, NFP[i].x) and almost_equal(referencey, NFP[i].y):
+                for nfp in NFP:
+                    if almost_equal(referencex, nfp.x) and almost_equal(referencey, nfp.y):
                         looped = True
 
             if looped:
@@ -1394,9 +1381,6 @@ def no_fit_polygon(A, B, inside, searchEdges):
 def polygon_hull(A, B):
     if not A or len(A) < 3 or not B or len(B) < 3:
         return None
-
-    i = None
-    j = None
 
     aoffsetx = A.offsetx or 0
     aoffsety = A.offsety or 0

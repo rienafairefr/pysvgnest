@@ -2,13 +2,16 @@
  SvgNest
  Licensed under the MIT license
 """
+import json
 import multiprocessing
+import os
 import threading
 import time
 from pyclipper import scale_to_clipper, SimplifyPolygon, PFT_NONZERO, Area, CleanPolygon, scale_from_clipper, \
     MinkowskiSum, JT_ROUND, ET_CLOSEDPOLYGON, PyclipperOffset
 from random import random, shuffle
 
+from svgnest.js.display import plot
 from svgnest.js.geometry import Point, Polygon
 from svgnest.js.geometrybase import almost_equal
 from svgnest.js.geometryutil import polygon_area, point_in_polygon, get_polygon_bounds, rotate_polygon, \
@@ -158,7 +161,7 @@ def generate_nfp(argtuple):
                                 cnfp[j].reverse()
                             nfp.append(cnfp[j])
 
-    return Nfp(key= pair.key, value= nfp)
+    return Nfp(key=pair.key, value=nfp)
 
 
 class Placement(list):
@@ -217,7 +220,7 @@ class SvgNest:
 
         return self.svg
 
-    def setbin(self, element):
+    def set_bin(self, element):
         if not self.svg:
             return
         self.bin = element
@@ -445,6 +448,11 @@ class SvgNest:
 
         try:
             generatedNfp = pool.map(generate_nfp, ((p, searchEdges, useHoles) for p in nfpPairs))
+            with open(os.path.join('raw', 'generated_nfp.json'), 'w+') as raw:
+                raw_data = [
+                    {'A': nfpPairs[i].A.x_y, 'B': nfpPairs[i].B.x_y, 'nfp': [item.x_y for item in p.value]} for i, p in enumerate(generatedNfp) if p is not None
+                ]
+                json.dump(raw_data, raw, indent=True)
             self.p_then(displayCallback, placelist, worker, generatedNfp)
             self.progress += 1
         finally:
@@ -493,7 +501,7 @@ class SvgNest:
                     num_placed_parts += 1
             if total_area != 0:
                 displayCallback(self.applyPlacement(self.best.placements), placed_area / total_area,
-                            '{0}/{1}'.format(num_placed_parts, num_parts))
+                                '{0}/{1}'.format(num_placed_parts, num_parts))
         else:
             displayCallback()
         worker.working = False
@@ -502,14 +510,12 @@ class SvgNest:
     # might be easier to use the DOM, but paths can't have paths as children. So we'll just make our own tree.
     def getParts(this, paths):
 
-        i = 0
-        k = 0
         polygons = []
 
         numChildren = len(paths)
         for i in range(0, numChildren):
             poly = this.parser.polygonify(paths[i])
-            poly = Polygon(this.cleanPolygon(poly))
+            poly = this.cleanPolygon(poly)
 
             # todo: warn user if poly could not be processed and is excluded from the nest
             if poly and len(poly) > 2 and abs(polygon_area(poly)) > this.config.curveTolerance ** 2:
@@ -518,8 +524,7 @@ class SvgNest:
 
         def toTree(list_, idstart=None):
             parents = []
-            i = None
-            j = None
+            i = 0
 
             # assign a unique id to each leaf
             id = idstart or 0
@@ -531,7 +536,7 @@ class SvgNest:
                 for j in range(0, len(list_)):
                     if j == i:
                         continue
-                    if point_in_polygon(p[0], list_[j]) == True:
+                    if point_in_polygon(p[0], list_[j]):
                         list_[j].children.append(p)
                         p.parent = list_[j]
                         ischild = True
@@ -552,13 +557,13 @@ class SvgNest:
 
                 i += 1
 
-            for i in range(0, len(parents)):
-                parents[i].id = id
+            for parent in parents:
+                parent.id = id
                 id += 1
 
-            for i in range(0, len(parents)):
-                if parents[i].children:
-                    id = toTree(parents[i].children, id)
+            for parent in parents:
+                if parent.children:
+                    id = toTree(parent.children, id)
 
             return id
 
@@ -625,7 +630,7 @@ class SvgNest:
 
         normal = scale_from_clipper(polygon, self.config.clipperScale)
 
-        return Polygon([Point(x=polygon[0], y=polygon[1]) for polygon in normal])
+        return Polygon(*(Point(x=polygon[0], y=polygon[1]) for polygon in normal))
 
     # returns an array of SVG elements that represent the placement, for export or rendering
     def applyPlacement(self, placement):

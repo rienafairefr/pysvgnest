@@ -560,7 +560,7 @@ class SvgParser:
 
     # return a polygon from the given SVG element in the form of an array of points
     def polygonify(self, element):
-        poly = Polygon([])
+        poly = Polygon()
         i = 0
 
         if element.tagName == 'polygon' or element.tagName == 'polyline':
@@ -608,7 +608,8 @@ class SvgParser:
 
                 poly.append(point)
         elif element.tagName == 'ellipse':
-            # same as circle case. There is probably a way to reduce points but for convenience we will just flatten the equivalent circular polygon
+            # same as circle case. There is probably a way to reduce points
+            # but for convenience we will just flatten the equivalent circular polygon
             rx = parseFloat(element.getAttribute('rx'))
             ry = parseFloat(element.getAttribute('ry'))
             maxradius = max(rx, ry)
@@ -633,9 +634,6 @@ class SvgParser:
             # we'll assume that splitpath has already been run on this path, and it only has one M/m command
             seglist = pathSegList(element)
 
-            firstCommand = seglist[0]
-            lastCommand = seglist[-1]
-
             x, y, x0, y0, x1, y1, x2, y2, prevx, prevy, prevx1, prevy1, prevx2, prevy2 = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
 
             for i, s in enumerate(seglist):
@@ -649,7 +647,6 @@ class SvgParser:
 
                 prevx2 = x2
                 prevy2 = y2
-
 
 
                 if re.match('[MLHVCSQTA]', command):
