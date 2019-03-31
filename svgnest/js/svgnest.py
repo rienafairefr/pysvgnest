@@ -5,11 +5,14 @@
 import json
 import multiprocessing
 import os
+import sys
 import threading
 import time
 from pyclipper import scale_to_clipper, SimplifyPolygon, PFT_NONZERO, Area, CleanPolygon, scale_from_clipper, \
     MinkowskiSum, JT_ROUND, ET_CLOSEDPOLYGON, PyclipperOffset
 from random import random, shuffle
+
+from simplejson import JSONEncoder
 
 from svgnest.js.display import plot
 from svgnest.js.geometry import Point, Polygon
@@ -19,7 +22,7 @@ from svgnest.js.geometryutil import polygon_area, point_in_polygon, get_polygon_
 from svgnest.js.placementworker import PlacementWorker
 from svgnest.js.svgparser import SvgParser, child_elements
 from svgnest.js.utils import splice, parseInt, parseFloat, Nfp, NfpPair, NfpKey, log
-
+import simplejson
 
 class NfpCache:
     pass
@@ -53,6 +56,13 @@ def toNestCoordinates(polygon, scale):
 
 
 CLIPPER_SCALE = 10000000
+
+
+class ObjectEncoder(JSONEncoder):
+    def default(self, obj):
+        if hasattr(obj, "to_json"):
+            return self.default(obj.to_json())
+        return obj
 
 
 def minkowski_difference(A, B):
@@ -350,6 +360,8 @@ class SvgNest:
 
         self.working = False
 
+        # print(json.dumps(tree, cls=ObjectEncoder))
+
         def worker_loop():
             while True:
                 if not self.working:
@@ -466,6 +478,8 @@ class SvgNest:
                     # either because the parts simply don't fit or an error in the nfp algo
                     self.nfpCache[Nfp.key] = Nfp.value
         worker.nfpCache = self.nfpCache
+
+        print(simplejson.dumps({simplejson.dumps(k, cls=ObjectEncoder): v for k,v in self.nfpCache.items()}, cls=ObjectEncoder))
 
         pool2 = multiprocessing.Pool()
 
