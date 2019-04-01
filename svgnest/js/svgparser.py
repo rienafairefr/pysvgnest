@@ -129,6 +129,11 @@ def parse_path(pathdef):
     return segments
 
 
+def write_path(segments):
+    # get d attribut from list of SVGPathSeg
+    return ' '.join([seg.d for seg in segments])
+
+
 def pathSegList(path):
     return parse_path(path.getAttribute('d'))
 
@@ -136,6 +141,26 @@ def pathSegList(path):
 OPERATIONS = ['matrix', 'scale', 'rotate', 'translate', 'skewX', 'skew']
 CMD_SPLIT_RE = re.compile('\s*(matrix|translate|scale|rotate|skewX|skewY)\s*\(\s*(.+?)\s*\)[\s,]*')
 PARAMS_SPLIT_RE = re.compile('[\s,]+')
+
+
+def transform_segments(transform, segments):
+    for segment in segments:
+        if hasattr(segment, 'x') and hasattr(segment, 'y'):
+            point = Point(segment.x, segment.y)
+            transformed = transform.calc(point.x, point.y)
+            segment.x = transformed[0]
+            segment.y = transformed[1]
+        if hasattr(segment, 'x1') and hasattr(segment, 'y1'):
+            point = Point(segment.x1, segment.y1)
+            transformed = transform.calc(point.x, point.y)
+            segment.x1 = transformed[0]
+            segment.y1 = transformed[1]
+        if hasattr(segment, 'x2') and hasattr(segment, 'y2'):
+            point = Point(segment.x1, segment.y1)
+            transformed = transform.calc(point.x, point.y)
+            segment.x2 = transformed[0]
+            segment.y2 = transformed[1]
+    return segments
 
 
 class SvgParser:
@@ -403,54 +428,40 @@ class SvgParser:
 
                 element.removeAttribute('transform')
             elif element.tagName == 'circle':
-                transformed = transform.calc(element.getAttribute('cx'), element.getAttribute('cy'))
+                transformed = transform.calc(parseFloat(element.getAttribute('cx')), parseFloat(element.getAttribute('cy')))
                 element.setAttribute('cx', transformed[0])
                 element.setAttribute('cy', transformed[1])
 
                 # skew not supported
-                element.setAttribute('r', element.getAttribute('r') * scale)
+                element.setAttribute('r', parseFloat(element.getAttribute('r')) * scale)
 
             if element.tagName == 'rect':
                 # similar to the ellipse, we'll replace rect with polygon
-                polygon = self.svg.createElementNS(element.namespaceURI, 'polygon')
+                polygon = self.svg.createElementNS(element.namespaceURI, 'path')
 
-                p1 = self.svg.createElementNS(element.namespaceURI, 'point')
-                p2 = self.svg.createElementNS(element.namespaceURI, 'point')
-                p3 = self.svg.createElementNS(element.namespaceURI, 'point')
-                p4 = self.svg.createElementNS(element.namespaceURI, 'point')
+                p1 = Point(parseFloat(element.getAttribute('x')) or 0, parseFloat(element.getAttribute('y')) or 0)
+                p2 = Point(p1.x + parseFloat(element.getAttribute('width')), p1.y)
+                p3 = Point(p2.x, p1.y + parseFloat(element.getAttribute('height')))
+                p4 = Point(p1.x, p3.y)
 
-                p1.x = parseFloat(element.getAttribute('x')) or 0
-                p1.y = parseFloat(element.getAttribute('y')) or 0
+                d = ("M{} {} L {} {} L {} {} L {} {} z"
+                     "".format(p1.x, p1.y, p2.x, p2.y, p3.x, p3.y, p4.x, p4.y))
 
-                p2.x = p1.x + parseFloat(element.getAttribute('width'))
-                p2.y = p1.y
-
-                p3.x = p2.x
-                p3.y = p1.y + parseFloat(element.getAttribute('height'))
-
-                p4.x = p1.x
-                p4.y = p3.y
-
-                polygon.points.appendItem(p1)
-                polygon.points.appendItem(p2)
-                polygon.points.appendItem(p3)
-                polygon.points.appendItem(p4)
+                polygon.setAttribute('d', d)
 
                 transform_property = element.getAttribute('transform')
                 if transform_property:
                     polygon.setAttribute('transform', transform_property)
 
-                element.parentElement.replaceChild(polygon, element)
-                element = polygon
+                element.parentNode.replaceChild(polygon, element)
 
             if element.tagName == 'polygon' or element.tagName == 'polyline':
-                for i in range(0, len(element.points)):
-                    point = element.points[i]
-                    transformed = transform.calc(point.x, point.y)
-                    point.x = transformed[0]
-                    point.y = transformed[1]
+                polygon = self.svg.createElementNS(element.namespaceURI, 'path')
+                segments = parse_path(element.getAttribute('d'))
+                segments = transform_segments(transform, segments)
+                polygon.setAttribute('d', write_path(segments))
 
-                del element.transform
+                element.parentNode.replaceChild(polygon, element)
 
     # bring all child elements to the top level
     def flatten(self, element):
@@ -580,8 +591,11 @@ class SvgParser:
             cx = parseFloat(element.getAttribute('cx'))
             cy = parseFloat(element.getAttribute('cy'))
 
-            # num is the smallest number of segments required to approximate the circle to the given tolerance
-            num = math.ceil((2 * math.pi) / math.acos(1 - (self.conf.tolerance / radius)))
+            if radius < self.conf.tolerance:
+                num = 4
+            else:
+                # num is the smallest number of segments required to approximate the circle to the given tolerance
+                num = math.ceil((2 * math.pi) / math.acos(1 - (self.conf.tolerance / radius)))
 
             if num < 3:
                 num = 3

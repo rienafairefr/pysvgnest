@@ -98,21 +98,21 @@ class Matrix:
 
     # Apply list of matrixes to (x,y) point.
     # If `isRelative` set, `translate` component of matrix will be skipped
-    def calc(self, x, y, isRelative=None):
+    def calc(self, x, y, is_relative=None):
         # Don't change point on empty transforms queue
-        if not len(self.queue):  return [x, y]
+        if not len(self.queue):
+            return [x, y]
 
         # Calculate final matrix, if not exists
         # NB. if you deside to apply transforms to point one-by-one,
         # they should be taken in reverse order
 
         if not self.cache:
-          self.cache = self.toArray()
+            self.cache = self.toArray()
 
         m = self.cache
 
+        new_x = x * m[0] + y * m[2] + (0 if is_relative else m[4])
+        new_y = x * m[1] + y * m[3] + (0 if is_relative else m[5])
         # Apply matrix to point
-        return [
-          x * m[0] + y * m[2] + (0 if isRelative else m[4]),
-          x * m[1] + y * m[3] + (0 if isRelative else m[5])
-        ]
+        return [new_x, new_y]

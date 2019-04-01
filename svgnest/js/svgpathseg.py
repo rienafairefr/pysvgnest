@@ -49,6 +49,10 @@ class SVGPathSeg:
     def __contains__(self, item):
         return hasattr(self, item)
 
+    @property
+    def d(self):
+        return self.pathSegTypeAsLetter + (' '.join(str(el) for el in self.d_args) if hasattr(self, 'd_args') else '')
+
 
 class SVGPathSegClosePath(SVGPathSeg):
     def __init__(self):
@@ -64,6 +68,10 @@ class SVGPathSegMoveto(SVGPathSeg):
         self.x = x
         self.y = y
 
+    @property
+    def d_args(self):
+        return [self.x, self.y]
+
 
 class SVGPathSegLineto(SVGPathSeg):
     def __init__(self, x, y, abs):
@@ -74,6 +82,10 @@ class SVGPathSegLineto(SVGPathSeg):
         self.x = x
         self.y = y
 
+    @property
+    def d_args(self):
+        return [self.x, self.y]
+
 
 class SVGPathSegLinetoHorizontal(SVGPathSeg):
     def __init__(self, x, abs):
@@ -83,6 +95,10 @@ class SVGPathSegLinetoHorizontal(SVGPathSeg):
             super().__init__(SVGPathSeg.PATHSEG_LINETO_HORIZONTAL_REL)
         self.x = x
 
+    @property
+    def d_args(self):
+        return [self.x]
+
 
 class SVGPathSegLinetoVertical(SVGPathSeg):
     def __init__(self, y, abs):
@@ -91,6 +107,10 @@ class SVGPathSegLinetoVertical(SVGPathSeg):
         else:
             super().__init__(SVGPathSeg.PATHSEG_LINETO_VERTICAL_REL)
         self.y = y
+
+    @property
+    def d_args(self):
+        return [self.y]
 
 
 class SVGPathSegCurvetoCubic(SVGPathSeg):
@@ -106,6 +126,10 @@ class SVGPathSegCurvetoCubic(SVGPathSeg):
         self.x2 = x2
         self.y2 = y2
 
+    @property
+    def d_args(self):
+        return [self.x, self.y, self.x1, self.y1, self.x2, self.y2]
+
 
 class SVGPathSegCurvetoCubicSmooth(SVGPathSeg):
     def __init__(self, x, y, x2, y2, abs):
@@ -117,6 +141,10 @@ class SVGPathSegCurvetoCubicSmooth(SVGPathSeg):
         self.y = y
         self.x2 = x2
         self.y2 = y2
+
+    @property
+    def d_args(self):
+        return [self.x, self.y, self.x2, self.y2]
 
 
 class SVGPathSegCurvetoQuadratic(SVGPathSeg):
@@ -130,6 +158,10 @@ class SVGPathSegCurvetoQuadratic(SVGPathSeg):
         self.x1 = x1
         self.y1 = y1
 
+    @property
+    def d_args(self):
+        return [self.x, self.y, self.x1, self.y1]
+
 
 class SVGPathSegCurvetoQuadraticSmooth(SVGPathSeg):
     def __init__(self, x, y, abs):
@@ -139,6 +171,10 @@ class SVGPathSegCurvetoQuadraticSmooth(SVGPathSeg):
             super().__init__(SVGPathSeg.PATHSEG_CURVETO_QUADRATIC_SMOOTH_REL)
         self.x = x
         self.y = y
+
+    @property
+    def d_args(self):
+        return [self.x, self.y]
 
 
 class SVGPathSegArc(SVGPathSeg):

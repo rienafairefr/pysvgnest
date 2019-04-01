@@ -2,9 +2,7 @@
  SvgNest
  Licensed under the MIT license
 """
-import json
 import multiprocessing
-import os
 import threading
 import time
 from pyclipper import scale_to_clipper, SimplifyPolygon, PFT_NONZERO, Area, CleanPolygon, scale_from_clipper, \
@@ -12,7 +10,6 @@ from pyclipper import scale_to_clipper, SimplifyPolygon, PFT_NONZERO, Area, Clea
 from random import random, shuffle
 
 from simplejson import JSONEncoder
-from svgnest.js.display import plot
 from svgnest.js.geometry import Point, Polygon
 from svgnest.js.geometrybase import almost_equal
 from svgnest.js.geometryutil import polygon_area, point_in_polygon, get_polygon_bounds, rotate_polygon, \
@@ -298,6 +295,7 @@ class SvgNest:
         binPolygon = self.clean_polygon(binPolygon)
 
         if not binPolygon or len(binPolygon) < 3:
+            print('binPolygon doesnt exist or has less than 3 sides')
             return False
 
         self.binBounds = get_polygon_bounds(binPolygon)
@@ -423,37 +421,11 @@ class SvgNest:
         useHoles = self.config.useHoles
 
         worker = PlacementWorker(binPolygon, placelist[:], ids, rotations, config, nfpCache)
-        """
-        p = Parallel(nfpPairs, {
-            env: {
-                'binPolygon': binPolygon,
-                'searchEdges': config.exploreConcave,
-                'useHoles': config.useHoles
-            },
-            evalPath: 'util/eval.js'
-        })
-        
-        self = this
-        spawncount = 0
-
-        def _spawnMapWorker(i, cb, done, env, wrk):
-            # hijack the worker call to check progress
-            spawncount += 1
-            progress = spawncount/ len(nfpPairs)
-            return Parallel.prototype._spawnMapWorker.call(p, i, cb, done, env, wrk)
-
-        p._spawnMapWorker = _spawnMapWorker
-        """
 
         pool = multiprocessing.Pool()
 
         try:
             generatedNfp = pool.map(generate_nfp, ((p, searchEdges, useHoles) for p in nfpPairs))
-            with open(os.path.join('raw', 'generated_nfp.json'), 'w+') as raw:
-                raw_data = [
-                    {'A': nfpPairs[i].A.x_y, 'B': nfpPairs[i].B.x_y, 'nfp': [item.x_y for item in p.value]} for i, p in enumerate(generatedNfp) if p is not None
-                ]
-                json.dump(raw_data, raw, indent=True)
             self.p_then(displayCallback, placelist, worker, generatedNfp)
             self.progress += 1
         finally:

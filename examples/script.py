@@ -33,7 +33,7 @@ def circlescase():
     svg_string = open('circles.svg', 'r').read()
     svg = nest.parsesvg(svg_string)
 
-    nest.set_bin(child_elements(svg)[142])
+    nest.set_bin(child_elements(svg)[0])
 
     nest.start(progress, display)
 
