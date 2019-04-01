@@ -117,6 +117,8 @@ def generate_nfp(argtuple):
             nfp = no_fit_polygon(A, B, False, searchEdges)
         else:
             nfp = minkowski_difference(A, B)
+
+        print('// nfp = ' + simplejson.dumps(nfp, cls=ObjectEncoder))
         # sanity check
         if not nfp or len(nfp) == 0:
             log('NFP Error: ' % pair.key)
@@ -358,18 +360,18 @@ class SvgNest:
 
         # print(json.dumps(tree, cls=ObjectEncoder))
 
-        def worker_loop():
-            while True:
-                if not self.working:
-                    self.launch_workers(tree, binPolygon, self.config, displayCallback)
-                    self.working = True
+        def worker_fn():
+            self.launch_workers(tree, binPolygon, self.config, displayCallback)
+            self.working = False
 
-                progressCallback(self.progress)
-                time.sleep(0.1)
+        while True:
+            if not self.working:
+                self.working = True
+                worker = threading.Thread(target=worker_fn)
+                worker.start()
 
-        worker = threading.Thread(target=worker_loop)
-        worker.start()
-        worker.join()
+            progressCallback(self.progress)
+            time.sleep(0.1)
 
     def launch_workers(self, tree, binPolygon, config, displayCallback):
         print('launch_workers')
@@ -643,14 +645,8 @@ class SvgNest:
         return Polygon(*(Point(x=polygon[0], y=polygon[1]) for polygon in normal))
 
     # returns an array of SVG elements that represent the placement, for export or rendering
-    def applyPlacement(self, placement):
-
-        i, j, k = 0, 0, 0
-        clone = []
-        for part in self.parts:
-            clone.append(part.cloneNode(False))
-
-        svglist = []
+    def apply_placement(self, placement):
+        clone = [part.cloneNode(False) for part in self.parts]
 
         # flatten the given tree into a list
         def _flattenTree(t, hole):
