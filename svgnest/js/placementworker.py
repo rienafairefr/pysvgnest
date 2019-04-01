@@ -2,6 +2,7 @@ import math
 
 from svgnest.js.display import plot
 from svgnest.js.geometry import Point, Polygon
+from svgnest.js.geometrybase import almost_equal
 from svgnest.js.geometryutil import rotate_polygon, polygon_area, get_polygon_bounds
 from svgnest.js.utils import splice, NfpKey
 from pyclipper import *
@@ -16,21 +17,12 @@ class Position:
         self.nfp = nfp
 
 
-# jsClipper uses X/Y instead of x/y...
-def toClipperCoordinates(polygon):
-    clone = []
-    for point in polygon:
-        clone.append([point.x, point.y])
-
-    return clone
+def to_clipper_coordinates(polygon):
+    return [[point.x, point.y] for point in polygon]
 
 
-def toNestCoordinates(polygon, scale):
-    clone = []
-    for point in polygon:
-        clone.append(Point(x=point[0]/scale, y=point[1]/scale))
-
-    return clone
+def to_nest_coordinates(polygon, scale):
+    return Polygon(*(Point(x=point[0]/scale, y=point[1]/scale) for point in polygon))
 
 
 def rotate_polygon(polygon, degrees):
@@ -152,9 +144,9 @@ class PlacementWorker:
 
                     continue
 
-                clipperBinNfp = [toClipperCoordinates(bin_nfp_item) for bin_nfp_item in binNfp]
+                clipper_bin_nfp = [to_clipper_coordinates(bin_nfp_item) for bin_nfp_item in binNfp]
 
-                clipperBinNfp = scale_to_clipper(clipperBinNfp, self.config.clipperScale)
+                clipper_bin_nfp = scale_to_clipper(clipper_bin_nfp, self.config.clipperScale)
 
                 clipper = Pyclipper()
 
@@ -171,15 +163,18 @@ class PlacementWorker:
                     if not nfp:
                         continue
 
-                    for k in range(0, len(nfp)):
-                        clone = toClipperCoordinates(nfp[k])
+                    for item_nfp in nfp:
+                        clone = to_clipper_coordinates(item_nfp)
                         for clone_item in clone:
                             clone_item[0] += placements[j].x
                             clone_item[1] += placements[j].y
 
                         clone = scale_to_clipper(clone, self.config.clipperScale)
-                        CleanPolygon(clone, 0.0001 * self.config.clipperScale)
+                        clone = CleanPolygon(clone, 0.0001 * self.config.clipperScale)
                         area = abs(Area(clone))
+
+                        # plot([*binNfp, item_nfp])
+
                         if len(clone) > 2 and area > 0.1*self.config.clipperScale*self.config.clipperScale:
                             clipper.AddPath(clone, PT_SUBJECT, True)
 
@@ -192,7 +187,7 @@ class PlacementWorker:
                 clipper = Pyclipper()
 
                 clipper.AddPaths(combinedNfp, PT_CLIP, True)
-                clipper.AddPaths(clipperBinNfp, PT_SUBJECT, True)
+                clipper.AddPaths(clipper_bin_nfp, PT_SUBJECT, True)
                 try:
                     finalNfp = clipper.Execute(CT_DIFFERENCE, PFT_NONZERO, PFT_NONZERO)
                 except ClipperException as e:
@@ -211,11 +206,7 @@ class PlacementWorker:
                 if not finalNfp or len(finalNfp) == 0:
                     continue
 
-                f = []
-                for nfp in finalNfp:
-                    # back to normal scale
-                    f.append(toNestCoordinates(nfp, self.config.clipperScale))
-                finalNfp = f
+                finalNfp = [to_nest_coordinates(nfp, self.config.clipperScale) for nfp in finalNfp]
 
                 # choose placement that results in the smallest bounding box
                 # could use convex hull instead, but it can create oddly
@@ -224,9 +215,6 @@ class PlacementWorker:
                 minwidth = None
                 minarea = None
                 minx = None
-                nf = None
-                area = None
-                shiftvector = None
 
                 for nf in finalNfp:
                     if abs(polygon_area(nf)) < 2:
@@ -236,7 +224,7 @@ class PlacementWorker:
                         allpoints = Polygon()
                         for m in range(0, len(placed)):
                             for n in range(0, len(placed[m])):
-                                allpoints.append(Point(x= placed[m][n].x+placements[m].x, y= placed[m][n].y+placements[m].y))
+                                allpoints.append(Point(x=placed[m][n].x+placements[m].x, y=placed[m][n].y+placements[m].y))
 
                         shiftvector = Position(
                             x=item_nf.x-path[0].x,
@@ -246,10 +234,16 @@ class PlacementWorker:
                             nfp=combinedNfp
                         )
 
-                        for m in range(0, len(path)):
-                            allpoints.append(Point(x=path[m].x+shiftvector.x, y=path[m].y+shiftvector.y))
+                        for p in path:
+                            allpoints.append(Point(x=p.x+shiftvector.x, y=p.y+shiftvector.y))
 
                         rectbounds = get_polygon_bounds(allpoints)
+                        bound_poly = Polygon(Point(rectbounds.x, rectbounds.y),
+                                      Point(rectbounds.x + rectbounds.width, rectbounds.y),
+                                      Point(rectbounds.x + rectbounds.width, rectbounds.y + rectbounds.height),
+                                      Point(rectbounds.x, rectbounds.y + rectbounds.height),
+                                      Point(rectbounds.x, rectbounds.y)
+                                             )
 
                         # weigh width more, to help compress in direction of gravity
                         area = rectbounds.width*2 + rectbounds.height

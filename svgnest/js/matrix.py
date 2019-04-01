@@ -84,11 +84,11 @@ class Matrix:
 
         if not len(self.queue):
             self.cache = [1, 0, 0, 1, 0, 0]
-            return self.cache;
+            return self.cache
 
         self.cache = self.queue[0]
 
-        if self.queue.length == 1:
+        if len(self.queue) == 1:
             return self.cache
 
         for i in range(0, len(self.queue)):

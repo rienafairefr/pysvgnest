@@ -133,6 +133,11 @@ def pathSegList(path):
     return parse_path(path.getAttribute('d'))
 
 
+OPERATIONS = ['matrix', 'scale', 'rotate', 'translate', 'skewX', 'skew']
+CMD_SPLIT_RE = re.compile('\s*(matrix|translate|scale|rotate|skewX|skewY)\s*\(\s*(.+?)\s*\)[\s,]*')
+PARAMS_SPLIT_RE = re.compile('[\s,]+')
+
+
 class SvgParser:
     def __init__(self):
         # the SVG document
@@ -163,7 +168,7 @@ class SvgParser:
     # use the utility functions in this class to prepare the svg for CAD-CAM/nest related operations
     def clean(this):
         # apply any transformations, so that all path positions etc will be in the same coordinate space
-        this.applyTransform(this.svgRoot)
+        this.apply_transform(this.svgRoot)
 
         # remove any g elements and bring all elements to the top level
         this.flatten(this.svgRoot)
@@ -239,22 +244,6 @@ class SvgParser:
     # takes an SVG transform string and returns corresponding SVGMatrix
     # from https://github.com/fontello/svgpath
     def transformParse(this, transformString):
-
-        class Operations(list):
-            def __init__(self):
-                super().__init__()
-                self.matrix = True
-                self.scale = True
-                self.rotate = True
-                self.translate = True
-                self.skewX = True
-                self.skew = True
-
-        operations = Operations()
-
-        CMD_SPLIT_RE = re.compile('\s*(matrix|translate|scale|rotate|skewX|skewY)\s*\(\s*(.+?)\s*\)[\s,]*')
-        PARAMS_SPLIT_RE = re.compile('[\s,]+')
-
         matrix = Matrix()
         cmd = None
         params = None
@@ -265,57 +254,58 @@ class SvgParser:
         for item in items:
 
             # Skip empty elements
-            if not len(item): continue
+            if not len(item):
+                continue
 
             # remember operation
-            if operations[item] is not None:
+            if item in OPERATIONS:
                 cmd = item
                 continue
 
             # extract params & att operation to matrix
-            params = PARAMS_SPLIT_RE.split(item).map(lambda i: +i or 0)
+            params = [float(el) if el else 0 for el in PARAMS_SPLIT_RE.split(item)]
 
             # If params count is not correct - ignore command
             if cmd == 'matrix':
-                if params.length == 6:
+                if len(params) == 6:
                     matrix.matrix(params)
                 continue
 
             elif cmd == 'scale':
-                if params.length == 1:
+                if len(params) == 1:
                     matrix.scale(params[0], params[0])
-                elif params.length == 2:
+                elif len(params) == 2:
                     matrix.scale(params[0], params[1])
                 continue
 
             elif cmd == 'rotate':
-                if params.length == 1:
+                if len(params) == 1:
                     matrix.rotate(params[0], 0, 0)
-                elif params.length == 3:
+                elif len(params) == 3:
                     matrix.rotate(params[0], params[1], params[2])
                 continue
 
             elif cmd == 'translate':
-                if params.length == 1:
+                if len(params) == 1:
                     matrix.translate(params[0], 0)
-                elif params.length == 2:
+                elif len(params) == 2:
                     matrix.translate(params[0], params[1])
                 continue
 
             elif cmd == 'skewX':
-                if params.length == 1:
+                if len(params) == 1:
                     matrix.skewX(params[0])
                 continue
 
             elif cmd == 'skewY':
-                if params.length == 1:
+                if len(params) == 1:
                     matrix.skewY(params[0])
                 continue
 
         return matrix
 
     # recursively apply the transform property to the given element
-    def applyTransform(this, element, globalTransform=None):
+    def apply_transform(self, element, globalTransform=None):
 
         globalTransform = globalTransform or ''
         transformString = element.getAttribute('transform') or ''
@@ -326,7 +316,7 @@ class SvgParser:
         rotate = None
 
         if transformString and len(transformString) > 0:
-            transform = this.transformParse(transformString)
+            transform = self.transformParse(transformString)
 
         if not transform:
             transform = Matrix()
@@ -341,12 +331,12 @@ class SvgParser:
             if element.hasAttribute('transform'):
                 element.removeAttribute('transform')
             for child in child_elements(element):
-                this.applyTransform(child, transformString)
+                self.apply_transform(child, transformString)
         elif transform and not transform.isIdentity():
             if element.tagName == 'ellipse':
                 # the goal is to remove the transform property, but an ellipse without a transform will have no rotation
                 # for the sake of simplicity, we will replace the ellipse with a path, and apply the transform to that path
-                path = this.svg.createElementNS(element.namespaceURI, 'path')
+                path = self.svg.createElementNS(element.namespaceURI, 'path')
                 move = path.createSVGPathSegMovetoAbs(
                     parseFloat(element.getAttribute('cx')) - parseFloat(element.getAttribute('rx')),
                     element.getAttribute('cy'))
@@ -371,7 +361,7 @@ class SvgParser:
                 element = path
 
             if element.tagName == 'path':
-                this.pathToAbsolute(element)
+                self.pathToAbsolute(element)
                 seglist = element.pathSegList
                 prevx = 0
                 prevy = 0
@@ -425,12 +415,12 @@ class SvgParser:
 
             if element.tagName == 'rect':
                 # similar to the ellipse, we'll replace rect with polygon
-                polygon = this.svg.createElementNS(element.namespaceURI, 'polygon')
+                polygon = self.svg.createElementNS(element.namespaceURI, 'polygon')
 
-                p1 = this.svgRoot.createSVGPoint()
-                p2 = this.svgRoot.createSVGPoint()
-                p3 = this.svgRoot.createSVGPoint()
-                p4 = this.svgRoot.createSVGPoint()
+                p1 = self.svg.createElementNS(element.namespaceURI, 'point')
+                p2 = self.svg.createElementNS(element.namespaceURI, 'point')
+                p3 = self.svg.createElementNS(element.namespaceURI, 'point')
+                p4 = self.svg.createElementNS(element.namespaceURI, 'point')
 
                 p1.x = parseFloat(element.getAttribute('x')) or 0
                 p1.y = parseFloat(element.getAttribute('y')) or 0

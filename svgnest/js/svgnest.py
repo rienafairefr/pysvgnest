@@ -5,7 +5,6 @@
 import json
 import multiprocessing
 import os
-import sys
 import threading
 import time
 from pyclipper import scale_to_clipper, SimplifyPolygon, PFT_NONZERO, Area, CleanPolygon, scale_from_clipper, \
@@ -13,7 +12,6 @@ from pyclipper import scale_to_clipper, SimplifyPolygon, PFT_NONZERO, Area, Clea
 from random import random, shuffle
 
 from simplejson import JSONEncoder
-
 from svgnest.js.display import plot
 from svgnest.js.geometry import Point, Polygon
 from svgnest.js.geometrybase import almost_equal
@@ -22,7 +20,7 @@ from svgnest.js.geometryutil import polygon_area, point_in_polygon, get_polygon_
 from svgnest.js.placementworker import PlacementWorker
 from svgnest.js.svgparser import SvgParser, child_elements
 from svgnest.js.utils import splice, parseInt, parseFloat, Nfp, NfpPair, NfpKey, log
-import simplejson
+
 
 class NfpCache:
     pass
@@ -44,11 +42,7 @@ def to_clipper_coordinates(polygon):
 
 
 def to_nest_coordinates(polygon, scale):
-    clone = []
-    for point in polygon:
-        clone.append(Point(x=point[0]/scale, y=point[1]/scale))
-
-    return clone
+    return Polygon(*(Point(x=point[0]/scale, y=point[1]/scale) for point in polygon))
 
 
 CLIPPER_SCALE = 10000000
@@ -118,7 +112,6 @@ def generate_nfp(argtuple):
         else:
             nfp = minkowski_difference(A, B)
 
-        print('// nfp = ' + simplejson.dumps(nfp, cls=ObjectEncoder))
         # sanity check
         if not nfp or len(nfp) == 0:
             log('NFP Error: ' % pair.key)
@@ -155,13 +148,13 @@ def generate_nfp(argtuple):
         if useHoles and A.children and len(A.children) > 0:
             Bbounds = get_polygon_bounds(B)
 
-            for i in range(0, len(A.children)):
-                Abounds = get_polygon_bounds(A.children[i])
+            for Achild in A.children:
+                Abounds = get_polygon_bounds(Achild)
 
                 # no need to find nfp if B's bounding box is too big
                 if Abounds.width > Bbounds.width and Abounds.height > Bbounds.height:
 
-                    cnfp = no_fit_polygon(A.children[i], B, True, searchEdges)
+                    cnfp = no_fit_polygon(Achild, B, True, searchEdges)
                     # ensure all interior NFPs have the same winding direction
                     if cnfp and len(cnfp) > 0:
                         for j in range(0, len(cnfp)):
@@ -196,6 +189,7 @@ class SvgNest:
         self.workerTimer = None
         self.progress = 0
         self.parser = None
+        self.binindex = None
         self.individual = None
 
     def parsesvg(self, svgstring):
@@ -216,7 +210,7 @@ class SvgNest:
 
         self.svg = self.parser.clean()
 
-        self.tree = self.getParts(child_elements(self.svg))
+        self.tree = self.get_parts(child_elements(self.svg))
 
         # re-order elements such that deeper elements are on top, so they can be moused over
         def zorder(paths):
@@ -276,15 +270,14 @@ class SvgNest:
             return False
 
         self.parts = child_elements(self.svg)
-        parts = self.parts
-        binindex = self.parts.index(self.bin)
+        self.binindex = self.parts.index(self.bin)
 
-        if binindex >= 0:
+        if self.binindex >= 0:
             # don't process bin as a part of the tree
-            splice(parts, binindex, 1)
+            splice(self.parts, self.binindex, 1)
 
         # build tree without bin
-        tree = self.getParts(parts[:])
+        tree = self.get_parts(self.parts[:])
 
         # offset tree recursively
         def offsetTree(t, offset, offsetFunction):
@@ -299,10 +292,10 @@ class SvgNest:
                 if t[i].children and len(t[i].children) > 0:
                     offsetTree(t[i].children, -offset, offsetFunction)
 
-        offsetTree(tree, 0.5 * self.config.spacing, self.polygonOffset)
+        offsetTree(tree, 0.5 * self.config.spacing, self.polygon_offset)
 
         binPolygon = self.parser.polygonify(self.bin)
-        binPolygon = self.cleanPolygon(binPolygon)
+        binPolygon = self.clean_polygon(binPolygon)
 
         if not binPolygon or len(binPolygon) < 3:
             return False
@@ -310,7 +303,7 @@ class SvgNest:
         self.binBounds = get_polygon_bounds(binPolygon)
 
         if self.config.spacing > 0:
-            offsetBin = self.polygonOffset(binPolygon, -0.5 * self.config.spacing)
+            offsetBin = self.polygon_offset(binPolygon, -0.5 * self.config.spacing)
             if len(offsetBin) == 1:
                 # if the offset contains 0 or more than 1 path, something went wrong.
                 binPolygon = offsetBin.pop()
@@ -357,8 +350,6 @@ class SvgNest:
                 tree[i].reverse()
 
         self.working = False
-
-        # print(json.dumps(tree, cls=ObjectEncoder))
 
         def worker_fn():
             self.launch_workers(tree, binPolygon, self.config, displayCallback)
@@ -477,8 +468,6 @@ class SvgNest:
                     self.nfpCache[Nfp.key] = Nfp.value
         worker.nfpCache = self.nfpCache
 
-        print(simplejson.dumps({simplejson.dumps(k, cls=ObjectEncoder): v for k,v in self.nfpCache.items()}, cls=ObjectEncoder))
-
         pool2 = multiprocessing.Pool()
 
         try:
@@ -512,29 +501,28 @@ class SvgNest:
                     placed_area += abs(polygon_area(self.tree[best_placement_item.id]))
                     num_placed_parts += 1
             if total_area != 0:
-                displayCallback(self.applyPlacement(self.best.placements), placed_area / total_area,
+                displayCallback(self, self.apply_placement(self.best.placements), placed_area / total_area,
                                 '{0}/{1}'.format(num_placed_parts, num_parts))
-        else:
-            displayCallback()
+                print('displayed')
         worker.working = False
 
     # assuming no intersections, return a tree where odd leaves are parts and even ones are holes
     # might be easier to use the DOM, but paths can't have paths as children. So we'll just make our own tree.
-    def getParts(this, paths):
+    def get_parts(self, paths):
 
         polygons = []
 
-        numChildren = len(paths)
-        for i in range(0, numChildren):
-            poly = this.parser.polygonify(paths[i])
-            poly = this.cleanPolygon(poly)
+        num_children = len(paths)
+        for i in range(0, num_children):
+            poly = self.parser.polygonify(paths[i])
+            poly = self.clean_polygon(poly)
 
             # todo: warn user if poly could not be processed and is excluded from the nest
-            if poly and len(poly) > 2 and abs(polygon_area(poly)) > this.config.curveTolerance ** 2:
+            if poly and len(poly) > 2 and abs(polygon_area(poly)) > self.config.curveTolerance ** 2:
                 poly.source = i
                 polygons.append(poly)
 
-        def toTree(list_, idstart=None):
+        def to_tree(list_, idstart=None):
             parents = []
             i = 0
 
@@ -575,23 +563,23 @@ class SvgNest:
 
             for parent in parents:
                 if parent.children:
-                    id = toTree(parent.children, id)
+                    id = to_tree(parent.children, id)
 
             return id
 
         # turn the list into a tree
-        toTree(polygons)
+        to_tree(polygons)
 
         return polygons
 
     # use the clipper library to return an offset to the given polygon.
     # Positive offset expands the polygon, negative contracts
     # note that this returns an array of polygons
-    def polygonOffset(self, polygon, offset):
+    def polygon_offset(self, polygon, offset):
         if not offset or offset == 0 or almost_equal(offset, 0):
             return polygon
 
-        p = self.svgToClipper(polygon)
+        p = self.svg_to_clipper(polygon)
 
         miterLimit = 2
         co = PyclipperOffset(miterLimit, self.config.curveTolerance * self.config.clipperScale)
@@ -601,13 +589,13 @@ class SvgNest:
 
         result = []
         for newpath in newpaths:
-            result.append(self.clipperToSvg(newpath))
+            result.append(self.clipper_to_svg(newpath))
 
         return result
 
     # returns a less complex polygon that satisfies the curve tolerance
-    def cleanPolygon(this, polygon):
-        p = this.svgToClipper(polygon)
+    def clean_polygon(this, polygon):
+        p = this.svg_to_clipper(polygon)
         # remove self-intersections and find the biggest polygon that's left
         simple = SimplifyPolygon(p, PFT_NONZERO)
 
@@ -628,17 +616,15 @@ class SvgNest:
         if not clean or len(clean) == 0:
             return None
 
-        return this.clipperToSvg(clean)
+        return this.clipper_to_svg(clean)
 
     # converts a polygon from normal float coordinates to integer coordinates used by clipper, as well as x/y -> X/Y
-    def svgToClipper(self, polygon):
+    def svg_to_clipper(self, polygon):
         clip = [[point.x, point.y] for point in polygon]
 
-        scaled = scale_to_clipper(clip, self.config.clipperScale)
+        return scale_to_clipper(clip, self.config.clipperScale)
 
-        return scaled
-
-    def clipperToSvg(self, polygon):
+    def clipper_to_svg(self, polygon):
 
         normal = scale_from_clipper(polygon, self.config.clipperScale)
 
@@ -659,20 +645,24 @@ class SvgNest:
 
             return flat
 
-        newsvg = self.svg.cloneNode(False)
-        document = self.svg.ownerDocument
-        newsvg.setAttribute('viewBox', '0 0 {0} {1}'.format(self.binBounds.width, self.binBounds.height))
-        newsvg.setAttribute('width', str(self.binBounds.width) + 'px')
-        newsvg.setAttribute('height', str(self.binBounds.height) + 'px')
-        binclone = self.bin.cloneNode(False)
-
-        binclone.setAttribute('class', 'bin')
-        binclone.setAttribute('transform',
-                              'translate({0} {1})'.format(-self.binBounds.x, -self.binBounds.y))
-        newsvg.appendChild(binclone)
+        svglist = []
 
         for item in placement:
+            newsvg = self.svg.cloneNode(False)
+            document = self.svg.ownerDocument
+            newsvg.setAttribute('viewBox', '0 0 {0} {1}'.format(self.binBounds.width, self.binBounds.height))
+            newsvg.setAttribute('width', str(self.binBounds.width) + 'px')
+            newsvg.setAttribute('height', str(self.binBounds.height) + 'px')
+            binclone = self.bin.cloneNode(False)
+
+            binclone.setAttribute('class', 'bin')
+            binclone.setAttribute('transform',
+                                  'translate({0} {1})'.format(-self.binBounds.x, -self.binBounds.y))
+            newsvg.appendChild(binclone)
+
             for p in item:
+                if p.id == self.binindex:
+                    continue
                 part = self.tree[p.id]
 
                 # the original path could have transforms and stuff on it, so apply our transforms on a group
@@ -682,10 +672,11 @@ class SvgNest:
                 partgroup.appendChild(clone[part.source])
 
                 if part.children and len(part.children) > 0:
+                    print('part has children')
                     flattened = _flattenTree(part.children, True)
                     for flattened_item in flattened:
                         try:
-                            c = clone[flattened_item.source]
+                            c = clone[flattened_item.source].cloneNode(False)
                         except IndexError:
                             continue
                         # add class to indicate hole
@@ -695,8 +686,9 @@ class SvgNest:
                         partgroup.appendChild(c)
 
                 newsvg.appendChild(partgroup)
+            svglist.append(newsvg)
 
-        return newsvg
+        return svglist
 
     def stop(self):
         self.working = False
@@ -722,7 +714,7 @@ class GeneticAlgorithm:
         # of insertion and the angle each part is rotated
         angles = []
         for part in adam:
-            angles.append(self.randomAngle(part))
+            angles.append(self.random_angle(part))
 
         self.population = [Individual(placement=adam, rotation=angles)]
 
@@ -731,7 +723,7 @@ class GeneticAlgorithm:
             self.population.append(mutant)
 
     # returns a random angle of insertion
-    def randomAngle(self, part):
+    def random_angle(self, part):
 
         angleList = []
         for i in range(0, max(self.config.rotations, 1)):
@@ -764,7 +756,7 @@ class GeneticAlgorithm:
 
             rand = random()
             if rand < 0.01 * self.config.mutationRate:
-                clone.rotation[i] = self.randomAngle(clone_placement)
+                clone.rotation[i] = self.random_angle(clone_placement)
 
         return clone
 
