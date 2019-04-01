@@ -37,9 +37,21 @@ def parseFloat(f):
         return None
 
 
-Nfp = namedtuple('Nfp', ['key', 'value'])
-NfpPair = namedtuple('NfpPair', ['A', 'B', 'key'])
-NfpKey = namedtuple('NfpKey', ['A', 'B', 'inside', 'Arotation', 'Brotation'])
+class Nfp(namedtuple('Nfp', ['key', 'value'])):
+    def to_json(self):
+        return {'key': self.key, 'value': self.value}
+
+
+class NfpPair(namedtuple('NfpPair', ['A', 'B', 'key'])):
+    def to_json(self):
+        return {'A': self.A, 'B': self.B, 'key': self.key}
+
+
+class NfpKey(namedtuple('NfpKey', ['A', 'B', 'inside', 'Arotation', 'Brotation'])):
+    def to_json(self):
+        return {'A': self.A, 'B': self.B, 'inside': self.inside, 'Arotation': self.Arotation, 'Brotration:': self.Brotation}
+
+
 DEBUG = True
 
 

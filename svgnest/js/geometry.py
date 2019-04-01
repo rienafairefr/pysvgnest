@@ -1,3 +1,5 @@
+from collections import namedtuple
+
 from svgnest.js.geometrybase import almost_equal
 
 
@@ -20,6 +22,9 @@ class Point(object):
 
     def almost_equal(self, other):
         return almost_equal(self.x, other.x) and almost_equal(self.y, other.y)
+
+    def to_json(self):
+        return {'x': self.x, 'y': self.y}
 
     @property
     def xy(self):
