@@ -26,6 +26,12 @@ class Point(object):
     def to_json(self):
         return {'x': self.x, 'y': self.y}
 
+    def __eq__(self, other):
+        if self.x == other.x and self.y == other.y:
+            return True
+        else:
+            return False
+
     @property
     def xy(self):
         return self.x, self.y
@@ -90,9 +96,18 @@ class Polygon(list):
         return len(self)
 
     @property
+    def closed(self):
+        return self[0] == self[-1]
+
+    @property
     def xy(self):
         return [point.x for point in self], [point.y for point in self]
 
     @property
     def x_y(self):
         return [(point.x, point.y) for point in self]
+
+    @classmethod
+    def from_list_dict(cls, l):
+        return Polygon(*(Point(p['x'], p['y']) for p in l))
+

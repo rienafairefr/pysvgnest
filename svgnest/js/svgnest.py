@@ -39,15 +39,11 @@ class Config:
     exploreConcave = False
 
 
-def toClipperCoordinates(polygon):
-    clone = []
-    for point in polygon:
-        clone.append([point.x, point.y])
-
-    return clone
+def to_clipper_coordinates(polygon):
+    return [[point.x, point.y] for point in polygon]
 
 
-def toNestCoordinates(polygon, scale):
+def to_nest_coordinates(polygon, scale):
     clone = []
     for point in polygon:
         clone.append(Point(x=point[0]/scale, y=point[1]/scale))
@@ -66,19 +62,19 @@ class ObjectEncoder(JSONEncoder):
 
 
 def minkowski_difference(A, B):
-    Ac = toClipperCoordinates(A)
-    scale_to_clipper(Ac, CLIPPER_SCALE)
-    Bc = toClipperCoordinates(B)
-    scale_to_clipper(Bc, CLIPPER_SCALE)
-    for bc in Bc:
+    Ac = to_clipper_coordinates(A)
+    Ascaled = scale_to_clipper(Ac, CLIPPER_SCALE)
+    Bc = to_clipper_coordinates(B)
+    Bscaled = scale_to_clipper(Bc, CLIPPER_SCALE)
+    for bc in Bscaled:
         bc[0] *= -1
         bc[1] *= -1
-    solution = MinkowskiSum(Ac, Bc, True)
+    solution = MinkowskiSum(Ascaled, Bscaled, True)
     clipperNfp = None
 
     largestArea = None
     for item in solution:
-        n = toNestCoordinates(item, 10000000)
+        n = to_nest_coordinates(item, CLIPPER_SCALE)
         sarea = polygon_area(n)
         if largestArea is None or largestArea > sarea:
             clipperNfp = n
@@ -325,15 +321,15 @@ class SvgNest:
         ybinmax = binPolygon[0].y
         ybinmin = binPolygon[0].y
 
-        for i in range(1, len(binPolygon)):
-            if binPolygon[i].x > xbinmax:
-                xbinmax = binPolygon[i].x
-            elif binPolygon[i].x < xbinmin:
-                xbinmin = binPolygon[i].x
-            if binPolygon[i].y > ybinmax:
-                ybinmax = binPolygon[i].y
-            elif binPolygon[i].y < ybinmin:
-                ybinmin = binPolygon[i].y
+        for item in binPolygon:
+            if item.x > xbinmax:
+                xbinmax = item.x
+            elif item.x < xbinmin:
+                xbinmin = item.x
+            if item.y > ybinmax:
+                ybinmax = item.y
+            elif item.y < ybinmin:
+                ybinmin = item.y
 
         for i in range(0, len(binPolygon)):
             binPolygon[i].x -= xbinmin
@@ -403,9 +399,9 @@ class SvgNest:
         rotations = self.individual.rotation
 
         ids = []
-        for i in range(0, len(placelist)):
-            ids.append(placelist[i].id)
-            placelist[i].rotation = rotations[i]
+        for i, place in enumerate(placelist):
+            ids.append(place.id)
+            place.rotation = rotations[i]
 
         nfpPairs = []
         newCache = {}

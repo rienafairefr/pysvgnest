@@ -260,7 +260,7 @@ class SvgParser:
         params = None
 
         # Split value into ['', 'translate', '10 50', '', 'scale', '2', '', 'rotate',  '-45', '']
-        items = transformString.split(CMD_SPLIT_RE)
+        items = CMD_SPLIT_RE.split(transformString)
 
         for item in items:
 
@@ -273,7 +273,7 @@ class SvgParser:
                 continue
 
             # extract params & att operation to matrix
-            params = item.split(PARAMS_SPLIT_RE).map(lambda i: +i or 0)
+            params = PARAMS_SPLIT_RE.split(item).map(lambda i: +i or 0)
 
             # If params count is not correct - ignore command
             if cmd == 'matrix':
@@ -325,7 +325,7 @@ class SvgParser:
         scale = None
         rotate = None
 
-        if transformString and transformString.length > 0:
+        if transformString and len(transformString) > 0:
             transform = this.transformParse(transformString)
 
         if not transform:

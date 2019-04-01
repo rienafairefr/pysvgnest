@@ -402,8 +402,6 @@ def point_in_polygon(point, polygon):
 # a negative area indicates counter-clockwise winding direction
 def polygon_area(polygon):
     area = 0
-    i = 0
-    j = len(polygon) - 1
     # for (i=0, j=polygon.length-1; i<polygon.length; j=i++){
     for i in range(len(polygon)):
         if i == 0:
@@ -469,6 +467,8 @@ def intersect(A, B):
                 # if a point is on a segment, it could intersect or it could not. Check via the neighboring points
                 b0in = point_in_polygon(b0, A)
                 b2in = point_in_polygon(b2, A)
+                if b0in is None or b2in is None:
+                    continue
                 if (b0in and not b2in) or (not b0in and b2in):
                     return True
                 else:
@@ -478,7 +478,8 @@ def intersect(A, B):
                 # if a point is on a segment, it could intersect or it could not. Check via the neighboring points
                 b1in = point_in_polygon(b1, A)
                 b3in = point_in_polygon(b3, A)
-
+                if b1in is None or b3in is None:
+                    continue
                 if (b1in and not b3in) or (not b1in and b3in):
                     return True
                 else:
@@ -489,23 +490,27 @@ def intersect(A, B):
                 a0in = point_in_polygon(a0, B)
                 a2in = point_in_polygon(a2, B)
 
+                if a0in is None or a2in is None:
+                    continue
                 if (a0in and not a2in) or (not a0in and a2in):
                     return True
-            else:
-                continue
+                else:
+                    continue
 
             if on_segment(b1, b2, a2) or (almost_equal(a2.x, b1.x) and almost_equal(a2.y, b1.y)):
                 # if a point is on a segment, it could intersect or it could not. Check via the neighboring points
                 a1in = point_in_polygon(a1, B)
                 a3in = point_in_polygon(a3, B)
 
+                if a1in is None or a3in is None:
+                    continue
                 if (a1in and not a3in) or (not a1in and a3in):
                     return True
                 else:
                     continue
 
             p = line_intersect(b1, b2, a1, a2)
-
+            print('line_intersect {}', p)
             if p is not None:
                 return True
 
@@ -1558,6 +1563,9 @@ def line_intersect(A, B, E, F, infinite=None):
     c2 = F.x * E.y - E.x * F.y
 
     denom = a1 * b2 - a2 * b1
+
+    if denom == 0:
+        return None
 
     x = (b1 * c2 - b2 * c1) / denom
     y = (a2 * c1 - a1 * c2) / denom
