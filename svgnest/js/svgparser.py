@@ -166,27 +166,24 @@ class SvgParser:
         return self.svgRoot
 
     # use the utility functions in this class to prepare the svg for CAD-CAM/nest related operations
-    def clean(this):
+    def clean(self):
         # apply any transformations, so that all path positions etc will be in the same coordinate space
-        this.apply_transform(this.svgRoot)
+        self.apply_transform(self.svgRoot)
 
         # remove any g elements and bring all elements to the top level
-        this.flatten(this.svgRoot)
+        self.flatten(self.svgRoot)
 
         # remove any non-contour elements like text
-        this.filter(this.allowedElements)
+        self.filter(self.allowedElements)
 
-        # split any compound paths into individual path elements
-        # this.recurse(this.svgRoot, this.splitPath)
-
-        return this.svgRoot
+        return self.svgRoot
 
     # return style node, if any
-    def getStyle(this):
-        if not this.svgRoot:
+    def getStyle(self):
+        if not self.svgRoot:
             return False
 
-        for el in this.svgRoot.childNodes:
+        for el in self.svgRoot.childNodes:
             if getattr(el, 'tagName', None) == 'style':
                 return el
 
@@ -194,7 +191,7 @@ class SvgParser:
 
     # set the given path as absolute coords (capital commands)
     # from http://stackoverflow.com/a/9677915/433888
-    def pathToAbsolute(this, path):
+    def path_to_absolute(self, path):
         if not path or path.tagName != 'path':
             raise Exception('invalid path')
 
@@ -243,7 +240,7 @@ class SvgParser:
 
     # takes an SVG transform string and returns corresponding SVGMatrix
     # from https://github.com/fontello/svgpath
-    def transformParse(this, transformString):
+    def transformParse(self, transformString):
         matrix = Matrix()
         cmd = None
         params = None
@@ -305,18 +302,16 @@ class SvgParser:
         return matrix
 
     # recursively apply the transform property to the given element
-    def apply_transform(self, element, globalTransform=None):
+    def apply_transform(self, element, global_transform=None):
 
-        globalTransform = globalTransform or ''
-        transformString = element.getAttribute('transform') or ''
-        transformString = globalTransform + transformString
+        global_transform = global_transform or ''
+        transform_string = element.getAttribute('transform') or ''
+        transform_string = global_transform + transform_string
 
         transform = None
-        scale = None
-        rotate = None
 
-        if transformString and len(transformString) > 0:
-            transform = self.transformParse(transformString)
+        if transform_string and len(transform_string) > 0:
+            transform = self.transformParse(transform_string)
 
         if not transform:
             transform = Matrix()
@@ -331,11 +326,13 @@ class SvgParser:
             if element.hasAttribute('transform'):
                 element.removeAttribute('transform')
             for child in child_elements(element):
-                self.apply_transform(child, transformString)
+                self.apply_transform(child, transform_string)
         elif transform and not transform.isIdentity():
             if element.tagName == 'ellipse':
-                # the goal is to remove the transform property, but an ellipse without a transform will have no rotation
-                # for the sake of simplicity, we will replace the ellipse with a path, and apply the transform to that path
+                # the goal is to remove the transform property,
+                # but an ellipse without a transform will have no rotation
+                # for the sake of simplicity, we will replace the ellipse
+                # with a path, and apply the transform to that path
                 path = self.svg.createElementNS(element.namespaceURI, 'path')
                 move = path.createSVGPathSegMovetoAbs(
                     parseFloat(element.getAttribute('cx')) - parseFloat(element.getAttribute('rx')),
@@ -352,16 +349,16 @@ class SvgParser:
                 path.pathSegList.appendItem(arc2)
                 path.pathSegList.appendItem(path.createSVGPathSegClosePath())
 
-                transformProperty = element.getAttribute('transform')
-                if transformProperty:
-                    path.setAttribute('transform', transformProperty)
+                transform_property = element.getAttribute('transform')
+                if transform_property:
+                    path.setAttribute('transform', transform_property)
 
                 element.parentElement.replaceChild(path, element)
 
                 element = path
 
             if element.tagName == 'path':
-                self.pathToAbsolute(element)
+                self.path_to_absolute(element)
                 seglist = element.pathSegList
                 prevx = 0
                 prevy = 0
@@ -439,9 +436,9 @@ class SvgParser:
                 polygon.points.appendItem(p3)
                 polygon.points.appendItem(p4)
 
-                transformProperty = element.getAttribute('transform')
-                if transformProperty:
-                    polygon.setAttribute('transform', transformProperty)
+                transform_property = element.getAttribute('transform')
+                if transform_property:
+                    polygon.setAttribute('transform', transform_property)
 
                 element.parentElement.replaceChild(polygon, element)
                 element = polygon
@@ -456,9 +453,9 @@ class SvgParser:
                 del element.transform
 
     # bring all child elements to the top level
-    def flatten(this, element):
+    def flatten(self, element):
         for child in child_elements(element):
-            this.flatten(child)
+            self.flatten(child)
 
         if element.tagName != 'svg':
             while element.hasChildNodes():
@@ -466,20 +463,20 @@ class SvgParser:
 
     # remove all elements with tag name not in the whitelist
     # use this to remove <text>, <g> etc that don't represent shapes
-    def filter(this, whitelist, element=None):
+    def filter(self, whitelist, element=None):
         if not whitelist or len(whitelist) == 0:
             raise Exception('invalid whitelist')
 
-        element = element or this.svgRoot
+        element = element or self.svgRoot
 
         for child in child_elements(element):
-            this.filter(whitelist, child)
+            self.filter(whitelist, child)
 
         if len(element.childNodes) == 0 and element.tagName not in whitelist:
             element.parentNode.removeChild(element)
 
     # split a compound path (paths with M, m commands) into an array of paths
-    def splitPath(this, path):
+    def split_path(self, path):
         if not path or path.tagName != 'path' or not path.parentNode:
             return False
 
@@ -529,16 +526,16 @@ class SvgParser:
                 x0 = x
                 y0 = y
 
-        addedPaths = []
+        added_paths = []
         for i in range(0, len(paths)):
             # don't add trivial paths from sequential M commands
             if paths[i].pathSegList.numberOfItems > 1:
                 path.parentNode.insertBefore(paths[i], path)
-                addedPaths.append(paths[i])
+                added_paths.append(paths[i])
 
         path.remove()
 
-        return addedPaths
+        return added_paths
 
     # recursively run the given function on the given element
     def recurse(self, element, func):
@@ -602,12 +599,12 @@ class SvgParser:
             # but for convenience we will just flatten the equivalent circular polygon
             rx = parseFloat(element.getAttribute('rx'))
             ry = parseFloat(element.getAttribute('ry'))
-            maxradius = max(rx, ry)
+            max_radius = max(rx, ry)
 
             cx = parseFloat(element.getAttribute('cx'))
             cy = parseFloat(element.getAttribute('cy'))
 
-            num = math.ceil((2 * math.pi) / math.acos(1 - (self.conf.tolerance / maxradius)))
+            num = math.ceil((2 * math.pi) / math.acos(1 - (self.conf.tolerance / max_radius)))
 
             if num < 3:
                 num = 3
@@ -637,7 +634,6 @@ class SvgParser:
 
                 prevx2 = x2
                 prevy2 = y2
-
 
                 if re.match('[MLHVCSQTA]', command):
                     if 'x1' in s: x1 = s.x1

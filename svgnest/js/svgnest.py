@@ -594,8 +594,8 @@ class SvgNest:
         return result
 
     # returns a less complex polygon that satisfies the curve tolerance
-    def clean_polygon(this, polygon):
-        p = this.svg_to_clipper(polygon)
+    def clean_polygon(self, polygon):
+        p = self.svg_to_clipper(polygon)
         # remove self-intersections and find the biggest polygon that's left
         simple = SimplifyPolygon(p, PFT_NONZERO)
 
@@ -611,12 +611,12 @@ class SvgNest:
                 biggestarea = area
 
         # clean up singularities, coincident points and edges
-        clean = CleanPolygon(biggest, this.config.curveTolerance * this.config.clipperScale)
+        clean = CleanPolygon(biggest, self.config.curveTolerance * self.config.clipperScale)
 
         if not clean or len(clean) == 0:
             return None
 
-        return this.clipper_to_svg(clean)
+        return self.clipper_to_svg(clean)
 
     # converts a polygon from normal float coordinates to integer coordinates used by clipper, as well as x/y -> X/Y
     def svg_to_clipper(self, polygon):
